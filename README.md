@@ -1,4 +1,4 @@
-# R&D Quiz Arena
+# R&D Quiz Tool
 
 A web app for running the biweekly R&D quiz: quizzes with eight question formats, autosave, one submission per person, scoring (automatic for choice questions; written answers via export, Claude and upload), a release checklist, results, leaderboard, a quiz library with answer keys, roles, and a change log.
 
