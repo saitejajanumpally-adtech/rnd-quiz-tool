@@ -1,0 +1,67 @@
+import { allQuestions } from './quizModel.js';
+export const round05 = (x) => Math.round(x * 2) / 2;
+export const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+
+export function isAnswered(v) {
+  if (v === undefined || v === null) return false;
+  if (typeof v === 'string') return v.trim() !== '';
+  if (Array.isArray(v)) return v.length > 0;
+  if (typeof v === 'object') return Object.keys(v).length > 0;
+  return true; // numbers (including 0) and booleans
+}
+export const hasAnyAnswer = (answers) => !!answers && Object.values(answers).some(isAnswered);
+export const answeredCount = (quiz, answers) => allQuestions(quiz).filter((q) => isAnswered((answers || {})[q.id])).length;
+
+// score for auto-marked question types; returns a number
+export function scoreAuto(q, k, ans) {
+  const pts = Number(q.points) || 0;
+  if (!k || !isAnswered(ans)) return 0;
+  switch (q.type) {
+    case 'mcq': case 'picture': return ans === k.correct ? pts : 0;
+    case 'tf': return ans === k.correct ? pts : 0;
+    case 'multi': {
+      const cor = k.correct || []; const sel = Array.isArray(ans) ? ans : [];
+      const right = sel.filter((x) => cor.includes(x)).length; const wrong = sel.length - right;
+      if (k.partial === false) return right === cor.length && wrong === 0 ? pts : 0;
+      return round05(Math.max(0, (right - wrong) / (cor.length || 1)) * pts);
+    }
+    case 'order': { const c = k.correct || []; return Array.isArray(ans) && ans.length === c.length && ans.every((v, i) => v === c[i]) ? pts : 0; }
+    case 'match': {
+      const c = k.correct || {}; const keys = Object.keys(c); if (!keys.length) return 0;
+      const hit = keys.filter((i) => Number(ans[i]) === c[i]).length;
+      return round05((hit / keys.length) * pts);
+    }
+    default: return 0;
+  }
+}
+
+// responses: [{uid,name,email,answers,submitted,auto?}]  written: { qid: { uid: {score,feedback} } }
+export function gradeQuiz({ quiz, key, responses, written = {}, autoSubmit }) {
+  const qs = allQuestions(quiz);
+  const secMax = quiz.sections.map((s) => s.questions.reduce((a, q) => a + (Number(q.points) || 0), 0));
+  const max = secMax.reduce((a, b) => a + b, 0);
+  let unscoredWritten = 0;
+  const rows = [];
+  responses.forEach((r) => {
+    const counts = r.submitted || (autoSubmit && hasAnyAnswer(r.answers));
+    if (!counts) return;
+    const secScore = quiz.sections.map(() => 0); const per = {};
+    qs.forEach((q) => {
+      let score = 0; let feedback = ''; let pending = false;
+      if (q.type === 'text') {
+        const w = (written[q.id] || {})[r.uid];
+        if (w) { score = clamp(round05(Number(w.score) || 0), 0, Number(q.points) || 0); feedback = w.feedback || ''; }
+        else if (isAnswered((r.answers || {})[q.id])) { pending = true; unscoredWritten++; }
+      } else score = scoreAuto(q, ((key.answers || {})[q.id]), (r.answers || {})[q.id]);
+      secScore[q.sectionIndex] += score;
+      per[q.id] = { score, max: Number(q.points) || 0, feedback, pending };
+    });
+    const total = round05(secScore.reduce((a, b) => a + b, 0));
+    rows.push({ uid: r.uid, name: r.name || r.email, email: r.email, total, max, auto: !!r.auto || !r.submitted, sections: quiz.sections.map((s, i) => ({ title: s.title, score: round05(secScore[i]), max: secMax[i] })), questions: per });
+  });
+  rows.sort((a, b) => b.total - a.total || String(a.name).localeCompare(String(b.name)));
+  rows.forEach((r, i) => { r.rank = i > 0 && rows[i - 1].total === r.total ? rows[i - 1].rank : i + 1; });
+  const avg = rows.length ? rows.reduce((a, r) => a + r.total, 0) / rows.length : 0;
+  const pub = { count: rows.length, avg: Math.round(avg * 100) / 100, max, top: rows.filter((r) => r.rank <= 10).slice(0, 15).map((r) => ({ rank: r.rank, name: r.name, total: r.total })) };
+  return { rows, pub, unscoredWritten };
+}

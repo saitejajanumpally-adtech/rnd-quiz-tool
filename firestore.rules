@@ -1,0 +1,168 @@
+rules_version = '2';
+
+// R&D Quiz Arena security rules.
+// These rules are the only protection for your data, so please read SETUP-GUIDE.md before changing them.
+// The email below is the permanent first admin. It must match "bootstrapAdmin" in src/config.js.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- who is signed in, and what they are allowed to be ----------
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower().matches('.*@databeat[.]io');
+    }
+    function me() { return request.auth.token.email.lower(); }
+    function roleOf() {
+      return exists(/databases/$(database)/documents/roles/$(me()))
+        ? get(/databases/$(database)/documents/roles/$(me())).data.role
+        : 'participant';
+    }
+    function isAdmin()   { return signedIn() && (me() == 'saiteja.janumpally@databeat.io' || roleOf() == 'admin'); }
+    function isCreator() { return signedIn() && roleOf() == 'creator'; }
+    function isLead()    { return signedIn() && roleOf() == 'lead'; }
+    function isStaff()   { return isAdmin() || isCreator(); }
+
+    // ---------- quiz helpers ----------
+    function released(q) {
+      return get(/databases/$(database)/documents/quizKeys/$(q)).data.released == true;
+    }
+    function canEditQuiz(q) {
+      let z = get(/databases/$(database)/documents/quizzes/$(q)).data;
+      return isAdmin() || (isCreator() && (z.ownerEmail == me() || me() in z.editors));
+    }
+    function quizOpen(q) {
+      let z = get(/databases/$(database)/documents/quizzes/$(q)).data;
+      return z.published == true
+        && request.time.toMillis() >= z.opens
+        && request.time.toMillis() < z.closes;
+    }
+    function leaderboardSetting() {
+      return exists(/databases/$(database)/documents/settings/app)
+        ? get(/databases/$(database)/documents/settings/app).data.leaderboardVisibility
+        : 'leads';
+    }
+
+    // ---------- roles: only people with extra access are listed ----------
+    match /roles/{e} {
+      allow get: if signedIn() && (e == me() || isStaff());
+      allow list: if isStaff();
+      allow create, update: if request.resource.data.role in ['lead', 'creator', 'admin']
+        && (isAdmin()
+            || (isCreator() && request.resource.data.role == 'lead'
+                && (resource == null || resource.data.role == 'lead')));
+      allow delete: if isAdmin() || (isCreator() && resource.data.role == 'lead');
+    }
+
+    match /settings/{d} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // the small list of quizzes everyone sees
+    match /quizIndex/{d} {
+      allow read: if signedIn();
+      allow write: if isStaff();
+    }
+
+    // ---------- quizzes: questions are readable only once the quiz has opened ----------
+    match /quizzes/{id} {
+      allow get: if signedIn() && ((resource.data.published == true && request.time.toMillis() >= resource.data.opens)
+        || isStaff());
+      allow list: if isStaff();
+      allow create: if isAdmin() || (isCreator() && request.resource.data.ownerEmail == me());
+      allow update: if isAdmin()
+        || (isCreator() && (resource.data.ownerEmail == me() || me() in resource.data.editors));
+      allow delete: if isAdmin()
+        || (isCreator() && resource.data.ownerEmail == me() && resource.data.published == false);
+    }
+
+    // the answer key (correct answers, rubrics, explanations): staff, or everyone after release
+    match /quizKeys/{id} {
+      allow get: if signedIn() && (resource.data.released == true || isStaff());
+      allow list: if isStaff();
+      allow create, update, delete: if canEditQuiz(id);
+    }
+
+    // ---------- responses: one per person per quiz; locked once submitted or closed ----------
+    match /responses/{rid} {
+      allow get: if signedIn() && (rid.matches('.*_' + request.auth.uid) || isStaff());
+      allow list: if isStaff();
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && rid == request.resource.data.quizId + '_' + request.auth.uid
+        && request.resource.data.email == me()
+        && request.resource.data.submitted == false
+        && request.resource.data.keys().hasOnly(['quizId', 'uid', 'email', 'name', 'answers', 'submitted', 'startedAt', 'updatedAt'])
+        && quizOpen(request.resource.data.quizId);
+      // the person's own branch comes first: it is the common case and costs the fewest database reads
+      allow update: if (signedIn()
+            && resource.data.uid == request.auth.uid
+            && resource.data.submitted == false
+            && request.resource.data.uid == resource.data.uid
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['answers', 'updatedAt', 'submitted', 'submittedAt'])
+            && quizOpen(resource.data.quizId))
+        || isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // ---------- results: written by staff, readable only after release ----------
+    match /myResults/{rid} {
+      allow get: if signedIn() && ((rid.matches('.*_' + request.auth.uid) && (resource == null || released(resource.data.quizId)))
+        || isStaff());
+      allow list: if isStaff();
+      allow write: if isStaff();
+    }
+    match /resultsPublic/{q} {
+      allow get: if signedIn() && (released(q) || isStaff());
+      allow write: if isStaff();
+    }
+    match /resultsFull/{q} {
+      allow get: if signedIn() && ((released(q) && ((isLead() && leaderboardSetting() != 'staff') || leaderboardSetting() == 'everyone'))
+        || isStaff());
+      allow write: if isStaff();
+    }
+    match /stats/{u} {
+      allow get: if signedIn() && (u == request.auth.uid || isStaff());
+      allow write: if isStaff();
+    }
+    match /writtenScores/{id} {
+      allow read, write: if isStaff();
+    }
+
+    // ---------- people ----------
+    match /users/{u} {
+      allow get: if signedIn() && (u == request.auth.uid || isStaff());
+      allow create: if signedIn() && u == request.auth.uid
+        && request.resource.data.email == me()
+        && request.resource.data.keys().hasOnly(['name', 'email', 'lastSeen', 'prefs']);
+      allow update: if signedIn() && u == request.auth.uid
+        && request.resource.data.email == me()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'email', 'lastSeen', 'prefs']);
+    }
+
+    // ---------- requests, log and outbox ----------
+    match /reviewRequests/{id} {
+      allow get: if signedIn() && (isStaff() || resource.data.uid == request.auth.uid);
+      allow list: if signedIn() && (isStaff() || resource.data.uid == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == me() && request.resource.data.status == 'open';
+      allow update: if isStaff();
+    }
+    match /accessRequests/{id} {
+      allow read: if isStaff();
+      allow create: if isCreator() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAdmin();
+    }
+    match /changeLog/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff() && request.resource.data.by == me();
+      allow update, delete: if false;
+    }
+    match /outbox/{id} {
+      allow read, create, update: if isStaff();
+    }
+  }
+}
