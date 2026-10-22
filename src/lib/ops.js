@@ -2,18 +2,19 @@
 import { store, rid } from './store.js';
 import { CONFIG } from '../config.js';
 import { toDocs, fromDocs, indexItem, allQuestions, hasWritten, fillTemplate } from './quizModel.js';
-import { gradeQuiz, hasAnyAnswer } from './scoring.js';
+import { gradeQuiz, hasAnyAnswer, applyMovement, topRows } from './scoring.js';
 import { buildWrittenExport } from './written.js';
 import { toCsv } from './csv.js';
 import { fmtDateTime } from './time.js';
 import { DEFAULT_THRESHOLDS } from './stages.js';
 
-export const DEFAULT_SETTINGS = { leaderboardVisibility: 'leads', thresholds: DEFAULT_THRESHOLDS, defaultMascots: ['robot'], integrations: { gas: false }, retention: 'forever', highlightDays: 5 };
+export const DEFAULT_SETTINGS = { leaderboardVisibility: 'leads', showMovement: true, newQuizDefaults: { autoSubmit: false, allowReviewRequests: false }, emails: { closingReminder: true, releaseNotice: true }, thresholds: DEFAULT_THRESHOLDS, defaultMascots: ['robot'], integrations: { gas: false }, retention: 'forever', highlightDays: 5 };
 export const ROLES = ['participant', 'lead', 'creator', 'admin'];
 export const ROLE_LABEL = { participant: 'Participant', lead: 'Lead', creator: 'Creator', admin: 'Admin' };
 export const isStaff = (role) => role === 'admin' || role === 'creator';
 export const isLeadPlus = (role) => role !== 'participant';
-export const canEditQuiz = (role, email, item) => role === 'admin' || (role === 'creator' && !!item && (item.ownerEmail === email || (item.editors || []).includes(email)));
+// Every creator can edit every quiz (agreed). Only admins archive, restore or delete.
+export const canEditQuiz = (role) => role === 'admin' || role === 'creator';
 const lc = (s) => String(s || '').trim().toLowerCase();
 
 export async function getRole(user) {
@@ -21,8 +22,64 @@ export async function getRole(user) {
   const r = await store.get('roles/' + lc(user.email));
   return r && ROLES.includes(r.role) ? r.role : 'participant';
 }
-export async function ensureUser(user) { await store.set('users/' + user.uid, { name: user.name, email: user.email, lastSeen: Date.now() }, true); }
-export async function loadSettings() { const s = await store.get('settings/app'); return { ...DEFAULT_SETTINGS, ...(s || {}) }; }
+// Each sign-in updates the record. The first sign-in date is kept, and signing in again brings a removed profile back to Active.
+export async function ensureUser(user) {
+  const now = Date.now(); const prev = await store.get('users/' + user.uid);
+  const base = { name: user.name, email: user.email, lastSeen: now, deleted: false, deletedAt: null };
+  await store.set('users/' + user.uid, prev ? base : { ...base, firstSeen: now }, true);
+  if (prev && prev.deleted) { try { await store.del('profileStatus/' + user.uid); } catch (e) { /* the marker is only cosmetic */ } }
+}
+// "Remove my profile" removes only the sign-in profile. Scores and history stay, shown as "Profile removed".
+// profileStatus/<uid> is a tiny public marker so leaderboards can grey the name without reading anyone's profile.
+export async function removeMyProfile(user) {
+  // The marker goes first, so if anything fails the profile is left exactly as it was.
+  await store.set('profileStatus/' + user.uid, { removed: true, at: Date.now() });
+  try { await store.update('users/' + user.uid, { deleted: true, deletedAt: Date.now() }); }
+  catch (e) { try { await store.del('profileStatus/' + user.uid); } catch (e2) { /* best effort */ } throw e; }
+}
+export async function loadRemoved() { try { return new Set((await store.list('profileStatus')).map((r) => r.id)); } catch (e) { return new Set(); } }
+export async function listUsers() { return store.list('users'); }
+// Users plus a count of quizzes each person took, read from the released results (one read per quiz, not per person).
+export async function usersExportData(index) {
+  const users = await store.list('users'); const took = [];
+  await Promise.all(Object.values(index).filter((i) => i.released).map(async (i) => { const f = await store.get('resultsFull/' + i.id).catch(() => null); ((f && f.rows) || []).forEach((r) => took.push({ uid: r.uid, submitted: true })); }));
+  return { users, responses: took };
+}
+
+// Archive hides a quiz from everyone except admins. The quiz and its results are kept.
+// Archived quizzes move out of the Library list (quizIndex/main) into an admin-only list (quizIndex/archived),
+// so participants and creators can't see the title either. Restore moves it back.
+export async function loadArchivedIndex() { const d = await store.get('quizIndex/archived'); return (d && d.items) || {}; }
+export async function setArchived(id, on, user, title) {
+  const main = await loadIndex(); const arch = await loadArchivedIndex().catch(() => ({}));
+  if (on) {
+    const item = main[id]; if (!item) throw new Error('That quiz is not in the Library list.');
+    await store.update('quizzes/' + id, { archived: true }); await store.update('quizKeys/' + id, { archived: true });
+    await store.set('quizIndex/archived', { items: { ...arch, [id]: { ...item, archived: true, archivedAt: Date.now() } } }, false);
+    const rest = { ...main }; delete rest[id]; await store.set('quizIndex/main', { items: rest }, false);
+  } else {
+    const item = arch[id]; if (!item) throw new Error('That quiz is not in the Archived list.');
+    const { archived, archivedAt, ...back } = item;
+    await store.set('quizIndex/main', { items: { ...main, [id]: back } }, false);
+    await store.update('quizzes/' + id, { archived: false }); await store.update('quizKeys/' + id, { archived: false });
+    const rest = { ...arch }; delete rest[id]; await store.set('quizIndex/archived', { items: rest }, false);
+  }
+  await log(user, on ? 'Archived quiz' : 'Restored quiz', title);
+}
+// Admin-only delete. Refused once results are released or anyone has submitted, because that data cannot be recovered.
+export async function deleteQuiz(id, user, title) {
+  const key = await store.get('quizKeys/' + id);
+  if (key && key.released) throw new Error('This quiz has released results. Archive it instead.');
+  const subs = await store.count('responses', { where: [['quizId', '==', id]] });
+  if (subs > 0) throw new Error(`${subs} people have responses to this quiz. Archive it instead.`);
+  await store.del('quizzes/' + id); await store.del('quizKeys/' + id);
+  const items = await loadIndex(); delete items[id]; await store.set('quizIndex/main', { items }, false);
+  await log(user, 'Deleted quiz', title);
+}
+export async function loadSettings() {
+  const s = (await store.get('settings/app')) || {};
+  return { ...DEFAULT_SETTINGS, ...s, newQuizDefaults: { ...DEFAULT_SETTINGS.newQuizDefaults, ...(s.newQuizDefaults || {}) }, emails: { ...DEFAULT_SETTINGS.emails, ...(s.emails || {}) } };
+}
 export async function saveSettings(patch, user) { await store.set('settings/app', patch, true); await log(user, 'Changed settings', Object.keys(patch).join(', ')); }
 export async function loadIndex() { const d = await store.get('quizIndex/main'); return (d && d.items) || {}; }
 export async function patchIndex(id, patch) {
@@ -58,9 +115,11 @@ export async function loadAuthoring(id) {
   return q ? fromDocs(id, q, k) : null;
 }
 export async function saveQuiz(a, user, { publish = false } = {}) {
+  if (!a.ownerName && a.ownerEmail === user.email) a = { ...a, ownerName: user.name || '' };
   const { quiz, key } = toDocs(a);
   const existingKey = await store.get('quizKeys/' + a.id).catch(() => null);
   const existing = await store.get('quizzes/' + a.id).catch(() => null);
+  if (existing && existing.archived) throw new Error('This quiz is archived. Restore it before editing.');
   const published = publish || !!(existing && existing.published);
   await store.set('quizzes/' + a.id, { ...quiz, published });
   await store.set('quizKeys/' + a.id, { ...key, released: !!(existingKey && existingKey.released) });
@@ -69,11 +128,6 @@ export async function saveQuiz(a, user, { publish = false } = {}) {
   await store.set('quizIndex/main', { items: { [a.id]: item } }, true);
   await log(user, publish && !(existing && existing.published) ? 'Published quiz' : 'Saved quiz', a.title);
   return item;
-}
-export async function deleteDraft(id, user, title) {
-  await store.del('quizzes/' + id); await store.del('quizKeys/' + id);
-  const items = await loadIndex(); delete items[id]; await store.set('quizIndex/main', { items }, false);
-  await log(user, 'Deleted draft', title);
 }
 export async function setCloses(id, ms, user, title) {
   await store.update('quizzes/' + id, { closes: ms }); await patchIndex(id, { closes: ms });
@@ -89,30 +143,39 @@ async function loadWritten(id, quiz) {
   await Promise.all(allQuestions(quiz).filter((q) => q.type === 'text').map(async (q) => { const d = await store.get(`writtenScores/${id}_${q.id}`); out[q.id] = (d && d.scores) || {}; }));
   return out;
 }
+// The latest earlier round that was scored and is still in the Library (archived quizzes are not).
+async function previousRound(id, quiz) {
+  const items = Object.values(await loadIndex()).filter((i) => i.id !== id && i.opens < quiz.opens && i.ops && i.ops.calcAt).sort((a, b) => b.opens - a.opens);
+  for (const i of items) { const f = await store.get('resultsFull/' + i.id).catch(() => null); if (f && f.rows && f.rows.length) return { item: i, rows: f.rows }; }
+  return null;
+}
 export async function calculate(id, user) {
   const [quiz, key] = await Promise.all([store.get('quizzes/' + id), store.get('quizKeys/' + id)]);
   const responses = await store.list('responses', { where: [['quizId', '==', id]] });
   const written = await loadWritten(id, quiz);
   const g = gradeQuiz({ quiz, key, responses, written, autoSubmit: !!quiz.autoSubmit });
+  const prev = await previousRound(id, quiz).catch(() => null);
+  const mv = applyMovement(g.rows, prev); g.pub.top = topRows(g.rows); g.pub.prevCount = mv.prevCount; g.pub.comparable = mv.comparable;
   const ops = [];
   const byUid = Object.fromEntries(responses.map((r) => [r.uid, r]));
   g.rows.forEach((r) => {
-    ops.push({ type: 'set', path: `myResults/${id}_${r.uid}`, data: { uid: r.uid, quizId: id, total: r.total, max: r.max, rank: r.rank, count: g.rows.length, sections: r.sections, questions: r.questions, auto: r.auto } });
+    ops.push({ type: 'set', path: `myResults/${id}_${r.uid}`, data: { uid: r.uid, quizId: id, total: r.total, max: r.max, rank: r.rank, count: g.rows.length, sections: r.sections, questions: r.questions, auto: r.auto, prevRank: r.prevRank, prevTotal: r.prevTotal, prevCount: mv.prevCount, move: r.move, missingRequired: r.missingRequired } });
     ops.push({ type: 'set', merge: true, path: 'stats/' + r.uid, data: { history: { [id]: { score: r.total, max: r.max, opens: quiz.opens, title: quiz.title } } } });
     const resp = byUid[r.uid];
     if (resp && !resp.submitted && r.auto) ops.push({ type: 'update', path: `responses/${id}_${r.uid}`, data: { submitted: true, auto: true, submittedAt: quiz.closes, updatedAt: Date.now() } });
   });
   ops.push({ type: 'set', path: 'resultsPublic/' + id, data: { ...g.pub, computedAt: Date.now() } });
-  ops.push({ type: 'set', path: 'resultsFull/' + id, data: { rows: g.rows.map((r) => ({ rank: r.rank, uid: r.uid, name: r.name, email: r.email, total: r.total, auto: r.auto, sections: r.sections })) } });
+  ops.push({ type: 'set', path: 'resultsFull/' + id, data: { prevCount: mv.prevCount, comparable: mv.comparable, prevTitle: prev ? prev.item.title : '', rows: g.rows.map((r) => ({ rank: r.rank, uid: r.uid, name: r.name, email: r.email, total: r.total, auto: r.auto, missingRequired: r.missingRequired, prevRank: r.prevRank, move: r.move, sections: r.sections })) } });
   await store.batch(ops);
   await patchIndex(id, { 'ops.calcAt': Date.now(), 'ops.writtenAt': g.unscoredWritten === 0 ? Date.now() : 0, submittedCount: g.rows.length, avgScore: g.pub.avg });
   await log(user, 'Calculated scores', `${quiz.title}: ${g.rows.length} participants, ${g.unscoredWritten} written answers still unscored`);
-  return { count: g.rows.length, unscored: g.unscoredWritten, auto: g.rows.filter((r) => r.auto).length, avg: g.pub.avg };
+  return { count: g.rows.length, unscored: g.unscoredWritten, auto: g.rows.filter((r) => r.auto).length, avg: g.pub.avg, missingRequired: g.rows.filter((r) => r.missingRequired).length };
 }
 export async function exportWrittenFor(id) {
   const quiz = await store.get('quizzes/' + id);
   const responses = await store.list('responses', { where: [['quizId', '==', id]] });
-  return { quiz, ...buildWrittenExport(quiz, responses, !!quiz.autoSubmit) };
+  const key = await store.get('quizKeys/' + id).catch(() => null);
+  return { quiz, ...buildWrittenExport(quiz, responses, !!quiz.autoSubmit, key || {}) };
 }
 export async function saveWrittenScores(id, rows, user, title) {
   const byQ = {}; const now = Date.now();

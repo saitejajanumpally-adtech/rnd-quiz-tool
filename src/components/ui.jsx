@@ -61,3 +61,72 @@ export function friendly(e) {
   if (/unavailable|network|offline/i.test(m)) return 'Can\'t reach the database. Check your connection and try again.';
   return m || 'Unknown error.';
 }
+
+// ---- shared visuals for the new screens
+const Svg = ({ children, size = 18, color = 'currentColor', sw = 2 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: 'none' }}>{children}</svg>;
+export const Icon = ({ name, size, color }) => ({
+  check: <Svg size={size} color={color}><path d="M5 12.5 10 17.5 19 7" /></Svg>,
+  lock: <Svg size={size} color={color}><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></Svg>,
+  coin: <Svg size={size} color={color}><ellipse cx="12" cy="7" rx="7" ry="3" /><path d="M5 7v5c0 1.7 3.1 3 7 3s7-1.3 7-3V7" /><path d="M5 12v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5" /></Svg>,
+  flame: <Svg size={size} color={color}><path d="M12 3c1 4 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 .2 1.5 1 2 2 2-.5-3 0-6 1-8z" /></Svg>,
+  target: <Svg size={size} color={color}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.5" /></Svg>,
+  clock: <Svg size={size} color={color}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Svg>,
+  cal: <Svg size={size} color={color}><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /></Svg>,
+  search: <Svg size={size} color={color}><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></Svg>,
+  chev: <Svg size={size} color={color}><path d="M6 9l6 6 6-6" /></Svg>
+}[name]);
+export const IconCircle = ({ children, size = 44, bg = 'var(--bg1)', bd = 'var(--border2)' }) => <span style={{ width: size, height: size, borderRadius: '50%', background: bg, border: '1px solid ' + bd, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>{children}</span>;
+// A scorecard: icon on top, label and value centered.
+export function Score({ icon, color, label, value, unit }) {
+  return <div className="tile score">{icon && <IconCircle>{<Icon name={icon} size={22} color={color} />}</IconCircle>}<div className="lab">{label}</div><div className="v">{value}{unit && <small> {unit}</small>}</div></div>;
+}
+// Movement against the previous round. Nothing shows when there is no earlier round to compare with.
+export function MoveChip({ move, hasPrev }) {
+  if (move === null || move === undefined) return hasPrev ? <span className="chip info">New</span> : null;
+  if (move > 0) return <span className="chip ok mv" aria-label={`Up ${move} places`}>↑ {move}</span>;
+  if (move < 0) return <span className="chip warn mv" aria-label={`Down ${-move} places`}>↓ {-move}</span>;
+  return <span className="chip mv" aria-label="Same place">–</span>;
+}
+export function Ring({ value, max, size = 130 }) {
+  const r = 52; const c = 2 * Math.PI * r; const f = max ? Math.max(0, Math.min(1, value / max)) : 0;
+  return <svg width={size} height={size} viewBox="0 0 130 130" role="img" aria-label={`Score ${value} out of ${max}`} style={{ flex: 'none' }}><circle cx="65" cy="65" r={r} fill="none" stroke="var(--bg)" strokeWidth="11" /><circle cx="65" cy="65" r={r} fill="none" stroke="var(--accent)" strokeWidth="11" strokeLinecap="round" strokeDasharray={`${c * f} ${c}`} transform="rotate(-90 65 65)" /><text x="65" y="70" textAnchor="middle" fontFamily="var(--mono)" fontSize="38" fontWeight="500" fill="var(--fg)">{value}</text><text x="65" y="92" textAnchor="middle" fontFamily="var(--mono)" fontSize="13" fill="var(--muted)">/ {max}</text></svg>;
+}
+// The funnel as stage cards, with a milestone bar. Wide enough that every stage name stays readable.
+export function Journey({ points, thresholds }) {
+  const st = stageFor(points, thresholds); const next = st.nextName ? thresholds[st.index + 1] : null;
+  const pts = Math.round(points * 2) / 2; const toNext = st.nextName ? (Math.round((next - points) * 2) / 2) : 0;
+  return (
+    <div className="card" style={{ padding: 26 }}>
+      <div className="row between center" style={{ marginBottom: 6 }}><div><div className="h3">Your learning journey</div><div className="fg2" style={{ marginTop: 2 }}>Every round moves you through the ad request funnel.</div></div><div className="row center" style={{ gap: 14 }}><span className="chip warn">Current stage: {st.name}</span><span className="fg2">{pts} total points</span></div></div>
+      <div className="stages">
+        {STAGES.map((n, i) => {
+          const done = i < st.index; const cur = i === st.index;
+          return <React.Fragment key={n}>
+            {i > 0 && <span className="stage-link" aria-hidden="true" />}
+            <div className="stage-wrap">
+              <div className="stage-mark" aria-hidden={!cur}>{cur && <><span className="lab" style={{ color: 'var(--warn)', letterSpacing: '.18em' }}>You are here</span><svg width="14" height="9" viewBox="0 0 14 9" aria-hidden="true"><path d="M0 0H14L7 9Z" fill="#E0A04B" /></svg></>}</div>
+              <div className={'stage' + (done ? ' done' : cur ? ' cur' : '')} aria-current={cur ? 'step' : undefined}>
+                <IconCircle size={38} bg={done ? 'var(--accent)' : cur ? 'rgba(224,160,75,.16)' : 'var(--bg3)'} bd={done ? 'var(--accent)' : cur ? 'var(--warn)' : 'var(--border)'}>{done ? <Icon name="check" size={18} color="#07221F" /> : cur ? <Icon name="coin" size={18} color="#E0A04B" /> : <Icon name="lock" size={17} color="#8A9CA5" />}</IconCircle>
+                <div><div style={{ fontWeight: 600, fontSize: 16 }}>{n}</div><div className="small" style={{ color: done ? 'var(--accent)' : cur ? 'var(--warn)' : 'var(--fg2)' }}>{thresholds[i]} pts</div></div>
+              </div>
+            </div>
+          </React.Fragment>;
+        })}
+      </div>
+      <div className="milestone">
+        {st.nextName ? <><span style={{ fontWeight: 500 }}>Next milestone: {st.nextName}</span><div className="bar" style={{ flex: '1 1 160px' }}><i style={{ width: Math.round(Math.min(1, points / next) * 100) + '%', background: 'var(--accent)' }} /></div><span className="mono">{pts} / {next} pts</span><span className="fg2">{toNext} more points to reach {st.nextName}</span></> : <span className="fg2">You reached the end of the funnel. Conversion.</span>}
+      </div>
+    </div>
+  );
+}
+// Gentle confetti for the finish moment. Purely decorative, and still when the person prefers reduced motion.
+export function Confetti({ w = 1000, h = 480, n = 36, seed = 7, keep }) {
+  let a = seed; const r = () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const cols = ['#5FC9C0', '#E0A04B', '#6FB7E0', '#E2745A', '#E8EBEC', '#2DA9A2']; const out = [];
+  for (let i = 0; i < n; i++) {
+    const x = Math.floor(r() * (w - 16)); const y = Math.floor(r() * (h - 20));
+    if (keep && x > keep[0] && x < keep[1] && y > keep[2] && y < keep[3]) continue;
+    out.push(<span key={i} className="conf" style={{ left: x, top: y, width: [6, 8, 10][Math.floor(r() * 3)], height: [12, 14, 16][Math.floor(r() * 3)], background: cols[Math.floor(r() * cols.length)], opacity: [0.55, 0.7, 0.85][Math.floor(r() * 3)], transform: `rotate(${Math.floor(r() * 180)}deg)`, animationDelay: (i % 7) * 0.12 + 's' }} />);
+  }
+  return <div aria-hidden="true" className="confetti">{out}</div>;
+}

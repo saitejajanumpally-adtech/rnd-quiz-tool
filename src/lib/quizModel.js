@@ -18,7 +18,7 @@ const inverse = (perm) => { const inv = []; perm.forEach((orig, pub) => { inv[or
 export const uid = (p = 'q') => p + Math.random().toString(36).slice(2, 8);
 
 export function newQuestion(type, id = uid()) {
-  const base = { id, type, text: '', ask: '', points: 2, explanation: '' };
+  const base = { id, type, text: '', ask: '', points: 2, explanation: '', required: false };
   switch (type) {
     case 'mcq': case 'picture': return { ...base, options: ['', '', '', ''], correct: 0, image: '' };
     case 'multi': return { ...base, options: ['', '', '', ''], correct: [], partial: true };
@@ -30,22 +30,23 @@ export function newQuestion(type, id = uid()) {
     default: return base;
   }
 }
-export function newQuiz(sched, owner) {
+export function newQuiz(sched, owner, defaults = {}, ownerName = '') {
   return {
-    id: uid('z'), title: '', topic: '', headline: '', ...sched, autoSubmit: false, allowReviewRequests: false, showInLibrary: true,
+    id: uid('z'), title: '', topic: '', headline: '', ...sched, autoSubmit: !!defaults.autoSubmit, allowReviewRequests: !!defaults.allowReviewRequests, showInLibrary: true,
     announceMsg: 'Hey @all, {quiz_name} is live. Take it here: {link}\nCloses: {close_time} · Answer key: {key_time}\nTeam Leads, please make sure everyone on your team submits.',
     releaseMsg: 'Hey @all, results for {quiz_name} are out. Your score and the answer key are ready: {link}',
-    ownerEmail: owner, editors: [],
-    sections: [{ id: uid('s'), title: 'Multiple choice', intro: '', timerMin: 0, questions: [newQuestion('mcq'), newQuestion('mcq')] }]
+    ownerEmail: owner, ownerName, editors: [],
+    // A new quiz starts empty. "flat" means no sections: one unnamed group that participants see as a single list.
+    sections: [{ id: uid('s'), title: '', flat: true, intro: '', timerMin: 0, questions: [] }]
   };
 }
 
 export function toDocs(a) {
   const key = { answers: {} };
   const sections = a.sections.map((s) => ({
-    id: s.id, title: s.title, intro: s.intro || '', timerMin: Number(s.timerMin) || 0,
+    id: s.id, title: s.title, flat: !!s.flat, intro: s.intro || '', timerMin: Number(s.timerMin) || 0,
     questions: s.questions.map((q) => {
-      const pub = { id: q.id, type: q.type, text: q.text, ask: q.ask || '', points: Number(q.points) || 0 };
+      const pub = { id: q.id, type: q.type, text: q.text, ask: q.ask || '', points: Number(q.points) || 0, required: !!q.required };
       const k = { explanation: q.explanation || '' };
       const seed = `${a.id}:${q.id}`;
       if (q.type === 'mcq' || q.type === 'picture') { pub.options = q.options.map(String); k.correct = q.correct; if (q.type === 'picture') pub.image = q.image || ''; }
@@ -65,7 +66,7 @@ export function toDocs(a) {
   const quiz = {
     title: a.title, topic: a.topic || '', headline: a.headline || '', opens: a.opens, closes: a.closes, keyAt: a.keyAt,
     autoSubmit: !!a.autoSubmit, allowReviewRequests: !!a.allowReviewRequests, showInLibrary: a.showInLibrary !== false,
-    announceMsg: a.announceMsg || '', releaseMsg: a.releaseMsg || '', ownerEmail: a.ownerEmail, editors: a.editors || [], sections
+    announceMsg: a.announceMsg || '', releaseMsg: a.releaseMsg || '', ownerEmail: a.ownerEmail, ownerName: a.ownerName || '', editors: a.editors || [], sections
   };
   return { quiz, key };
 }
@@ -73,10 +74,10 @@ export function toDocs(a) {
 export function fromDocs(id, quiz, key) {
   const ans = (key && key.answers) || {};
   const sections = quiz.sections.map((s) => ({
-    id: s.id, title: s.title, intro: s.intro || '', timerMin: s.timerMin || 0,
+    id: s.id, title: s.title, flat: !!s.flat, intro: s.intro || '', timerMin: s.timerMin || 0,
     questions: s.questions.map((p) => {
       const k = ans[p.id] || {};
-      const q = { id: p.id, type: p.type, text: p.text, ask: p.ask || '', points: p.points, explanation: k.explanation || '' };
+      const q = { id: p.id, type: p.type, text: p.text, ask: p.ask || '', points: p.points, explanation: k.explanation || '', required: !!p.required };
       if (p.type === 'mcq' || p.type === 'picture') { q.options = [...p.options]; q.correct = k.correct ?? 0; q.image = p.image || ''; }
       else if (p.type === 'multi') { q.options = [...p.options]; q.correct = k.correct || []; q.partial = k.partial !== false; }
       else if (p.type === 'tf') q.correct = k.correct !== false;
@@ -89,12 +90,12 @@ export function fromDocs(id, quiz, key) {
   }));
   return { id, title: quiz.title, topic: quiz.topic, headline: quiz.headline, opens: quiz.opens, closes: quiz.closes, keyAt: quiz.keyAt,
     autoSubmit: !!quiz.autoSubmit, allowReviewRequests: !!quiz.allowReviewRequests, showInLibrary: quiz.showInLibrary !== false,
-    announceMsg: quiz.announceMsg || '', releaseMsg: quiz.releaseMsg || '', ownerEmail: quiz.ownerEmail, editors: quiz.editors || [], sections };
+    announceMsg: quiz.announceMsg || '', releaseMsg: quiz.releaseMsg || '', ownerEmail: quiz.ownerEmail, ownerName: quiz.ownerName || '', editors: quiz.editors || [], sections };
 }
 
 export function allQuestions(quiz) {
   const out = [];
-  quiz.sections.forEach((s, si) => s.questions.forEach((q) => out.push({ ...q, sectionIndex: si, sectionTitle: s.title })));
+  quiz.sections.forEach((s, si) => s.questions.forEach((q) => out.push({ ...q, sectionIndex: si, sectionTitle: s.flat ? '' : s.title })));
   return out;
 }
 export const maxScore = (quiz) => allQuestions(quiz).reduce((a, q) => a + (Number(q.points) || 0), 0);
@@ -106,12 +107,12 @@ export function validate(a) {
   if (!a.opens || !a.closes) e.push('Set when the quiz opens and closes.');
   else if (a.closes <= a.opens) e.push('The close time must be after the open time.');
   if (a.keyAt && a.closes && a.keyAt < a.closes) e.push('The answer key release time should be after the quiz closes.');
-  if (!a.sections.length) e.push('Add at least one section.');
+  if (!a.sections.length) e.push('Add at least one question.');
   a.sections.forEach((s, si) => {
-    if (!s.title.trim()) e.push(`Section ${si + 1} needs a title.`);
-    if (!s.questions.length) e.push(`Section ${si + 1} has no questions.`);
+    if (!s.flat && !s.title.trim()) e.push(`Section ${si + 1} needs a title.`);
+    if (!s.questions.length) e.push(s.flat ? 'Add at least one question.' : `Section ${si + 1} has no questions.`);
     s.questions.forEach((q, qi) => {
-      const n = `Section ${si + 1}, question ${qi + 1}`;
+      const n = s.flat ? `Question ${qi + 1}` : `Section ${si + 1}, question ${qi + 1}`;
       if (!q.text.trim()) e.push(`${n}: add the question text.`);
       if (['mcq', 'multi', 'picture'].includes(q.type)) {
         if (q.options.length < 2 || q.options.some((o) => !String(o).trim())) e.push(`${n}: fill in at least two options, with no blanks.`);
@@ -145,7 +146,10 @@ export function indexItem(id, quiz, flags = {}) {
   return {
     id, title: quiz.title, headline: quiz.headline || '', topic: quiz.topic || '', opens: quiz.opens, closes: quiz.closes, keyAt: quiz.keyAt || 0,
     showInLibrary: quiz.showInLibrary !== false, autoSubmit: !!quiz.autoSubmit, allowReviewRequests: !!quiz.allowReviewRequests,
-    ownerEmail: quiz.ownerEmail, editors: quiz.editors || [], qCount: allQuestions(quiz).length, max: maxScore(quiz), hasWritten: hasWritten(quiz),
+    ownerEmail: quiz.ownerEmail, ownerName: quiz.ownerName || '', editors: quiz.editors || [], qCount: allQuestions(quiz).length, max: maxScore(quiz), hasWritten: hasWritten(quiz),
     published: false, released: false, ...flags
   };
 }
+
+export const nameFromEmail = (e) => String(e || '').split('@')[0].split(/[._-]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ') || 'Unknown';
+export const ownerLabel = (item) => (item && (item.ownerName || nameFromEmail(item.ownerEmail))) || 'Unknown';

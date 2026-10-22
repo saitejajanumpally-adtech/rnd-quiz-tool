@@ -6,5 +6,5 @@ export default defineConfig({
   base: './',
   plugins: [react()],
   build: { chunkSizeWarningLimit: 900 },
-  test: { environment: 'jsdom', globals: true, setupFiles: ['./src/test-setup.js'] }
+  test: { environment: 'jsdom', globals: true, setupFiles: ['./src/test-setup.js'], exclude: ['**/node_modules/**', 'tests/rules/**'] }
 });

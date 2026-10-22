@@ -35,6 +35,15 @@ export function scoreAuto(q, k, ans) {
   }
 }
 
+// The Top 10 everyone can see. Movement (move) is filled in by applyMovement.
+export const topRows = (rows) => rows.filter((r) => r.rank <= 10).slice(0, 15).map((r) => ({ rank: r.rank, uid: r.uid, name: r.name, total: r.total, move: r.move === undefined ? null : r.move, prevRank: r.prevRank === undefined ? null : r.prevRank }));
+// Compares this round's ranks with the previous round's rows. move > 0 means the person moved up that many places.
+export function applyMovement(rows, prev) {
+  const before = new Map(((prev && prev.rows) || []).map((r) => [r.uid, r]));
+  rows.forEach((r) => { const p = before.get(r.uid); r.prevRank = p ? p.rank : null; r.prevTotal = p ? p.total : null; r.move = p ? p.rank - r.rank : null; });
+  return { prevCount: before.size, comparable: rows.filter((r) => before.has(r.uid)).length };
+}
+
 // responses: [{uid,name,email,answers,submitted,auto?}]  written: { qid: { uid: {score,feedback} } }
 export function gradeQuiz({ quiz, key, responses, written = {}, autoSubmit }) {
   const qs = allQuestions(quiz);
@@ -57,11 +66,12 @@ export function gradeQuiz({ quiz, key, responses, written = {}, autoSubmit }) {
       per[q.id] = { score, max: Number(q.points) || 0, feedback, pending };
     });
     const total = round05(secScore.reduce((a, b) => a + b, 0));
-    rows.push({ uid: r.uid, name: r.name || r.email, email: r.email, total, max, auto: !!r.auto || !r.submitted, sections: quiz.sections.map((s, i) => ({ title: s.title, score: round05(secScore[i]), max: secMax[i] })), questions: per });
+    const missingRequired = qs.filter((q) => q.required && !isAnswered((r.answers || {})[q.id])).length;
+    rows.push({ uid: r.uid, name: r.name || r.email, email: r.email, total, max, auto: !!r.auto || !r.submitted, missingRequired, sections: quiz.sections.map((s, i) => ({ title: s.flat ? 'All questions' : s.title, score: round05(secScore[i]), max: secMax[i] })), questions: per });
   });
   rows.sort((a, b) => b.total - a.total || String(a.name).localeCompare(String(b.name)));
   rows.forEach((r, i) => { r.rank = i > 0 && rows[i - 1].total === r.total ? rows[i - 1].rank : i + 1; });
   const avg = rows.length ? rows.reduce((a, r) => a + r.total, 0) / rows.length : 0;
-  const pub = { count: rows.length, avg: Math.round(avg * 100) / 100, max, top: rows.filter((r) => r.rank <= 10).slice(0, 15).map((r) => ({ rank: r.rank, name: r.name, total: r.total })) };
+  const pub = { count: rows.length, avg: Math.round(avg * 100) / 100, max, top: topRows(rows) };
   return { rows, pub, unscoredWritten };
 }

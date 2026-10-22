@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { store } from './lib/store.js';
 import { DEMO } from './config.js';
-import { getRole, ensureUser, loadSettings, loadIndex, DEFAULT_SETTINGS } from './lib/ops.js';
+import { getRole, ensureUser, loadSettings, loadIndex, removeMyProfile, DEFAULT_SETTINGS } from './lib/ops.js';
 import { friendly } from './components/ui.jsx';
 
 const Ctx = createContext(null);
@@ -20,6 +20,7 @@ export function Provider({ children }) {
   const [stats, setStats] = useState({ history: {} }); const [prefs, setPrefs] = useState({});
   const [authError, setAuthError] = useState(''); const [now, setNow] = useState(Date.now());
   const [toastMsg, setToastMsg] = useState(null); const [dlg, setDlg] = useState(null);
+  const [tourOpen, setTourOpen] = useState(false); const [bye, setBye] = useState('');
   const path = useHash();
 
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(t); }, []);
@@ -34,7 +35,7 @@ export function Provider({ children }) {
       off = store.auth.onChange(async (u, err) => {
         if (err) setAuthError(err);
         if (!u) { setUser(null); setPhase('signin'); return; }
-        try { setUser(u); setAuthError(''); await ensureUser(u); await loadAll(u); setPhase('ready'); }
+        try { setUser(u); setAuthError(''); setBye(''); await ensureUser(u); await loadAll(u); setPhase('ready'); }
         catch (e) { setAuthError(friendly(e)); setPhase('error'); }
       });
     })();
@@ -53,9 +54,12 @@ export function Provider({ children }) {
   const savePrefs = useCallback(async (patch) => { const next = { ...prefs, ...patch }; setPrefs(next); await store.set('users/' + user.uid, { prefs: next }, true); }, [prefs, user]);
   const toast = useCallback((text, kind = 'ok') => { setToastMsg({ text, kind }); setTimeout(() => setToastMsg(null), 4200); }, []);
   const ask = useCallback((opts) => new Promise((res) => setDlg({ ...opts, res })), []);
-  const signOut = useCallback(async () => { await store.auth.signOut(); setPhase('signin'); }, []);
+  const signOut = useCallback(async () => { setBye('out'); location.hash = '#/'; await store.auth.signOut(); setPhase('signin'); }, []);
+  // Removes only the sign-in profile. Scores and history stay, and signing in again reconnects them.
+  const removeProfile = useCallback(async () => { await removeMyProfile(user); setBye('removed'); location.hash = '#/'; await store.auth.signOut(); setPhase('signin'); }, [user]);
+  const openTour = useCallback(() => setTourOpen(true), []); const closeTour = useCallback(() => setTourOpen(false), []);
 
-  const value = useMemo(() => ({ phase, user, role, settings, index, stats, prefs, now, path, reload, savePrefs, toast, ask, signOut, authError, demo: DEMO, setIndex }), [phase, user, role, settings, index, stats, prefs, now, path, reload, savePrefs, toast, ask, signOut, authError]);
+  const value = useMemo(() => ({ phase, user, role, settings, index, stats, prefs, now, path, reload, savePrefs, toast, ask, signOut, removeProfile, bye, tourOpen, openTour, closeTour, authError, demo: DEMO, setIndex }), [phase, user, role, settings, index, stats, prefs, now, path, reload, savePrefs, toast, ask, signOut, removeProfile, bye, tourOpen, openTour, closeTour, authError]);
   return (
     <Ctx.Provider value={value}>
       {children}

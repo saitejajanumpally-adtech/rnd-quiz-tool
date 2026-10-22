@@ -139,10 +139,10 @@ describe('scoring', () => {
     const ex = buildWrittenExport(quiz, responses, false);
     expect(ex.count).toBe(1); expect(Object.keys(ex.keys)).toEqual(['a~q_text']);
     expect(parseWrittenUpload('key,score,feedback,flag\na~q_text,1.5,Good,yes\n', ex.keys)).toMatchObject({ errors: [], flagged: 1, missing: [] });
-    expect(parseWrittenUpload('key,score,feedback,flag\na~q_text,3,Good,\n', ex.keys).errors[0]).toMatch(/outside 0 to 2/);
+    expect(parseWrittenUpload('key,score,feedback,flag\na~q_text,3,Good,\n', ex.keys).errors[0]).toMatch(/above the maximum of 2/);
     expect(parseWrittenUpload('key,score,feedback,flag\na~q_text,1.3,,\n', ex.keys).errors[0]).toMatch(/steps of 0.5/);
-    expect(parseWrittenUpload('key,score,feedback,flag\nzz~q,1,,\n', ex.keys).errors[0]).toMatch(/not in the export/);
-    expect(parseWrittenUpload('nope\n1', ex.keys).errors[0]).toMatch(/header/);
+    expect(parseWrittenUpload('key,score,feedback,flag\nzz~q,1,,\n', ex.keys).errors[0]).toMatch(/doesn’t match any answer/);
+    expect(parseWrittenUpload('nope\n1', ex.keys).errors[0]).toMatch(/header row/);
     expect(parseWrittenUpload('key,score\n', ex.keys).missing).toEqual(['a~q_text']);
   });
 });

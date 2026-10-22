@@ -16,7 +16,9 @@ describe('end to end quiz lifecycle on the demo backend', () => {
     await ops.setRole('New.Lead@databeat.io', 'lead', admin); expect(await ops.getRole({ email: 'new.lead@databeat.io' })).toBe('lead');
     await ops.setRole('new.lead@databeat.io', 'participant', admin); expect(await ops.getRole({ email: 'new.lead@databeat.io' })).toBe('participant');
     expect(ops.canEditQuiz('creator', creator.email, { ownerEmail: 'x', editors: [creator.email] })).toBe(true);
-    expect(ops.canEditQuiz('creator', creator.email, { ownerEmail: 'x', editors: [] })).toBe(false);
+    expect(ops.canEditQuiz('creator', creator.email, { ownerEmail: 'x', editors: [] })).toBe(true); // every creator can edit every quiz
+    expect(ops.canEditQuiz('participant', p1.email, { ownerEmail: 'x', editors: [] })).toBe(false);
+    expect(ops.canEditQuiz('lead', p1.email, { ownerEmail: 'x', editors: [] })).toBe(false);
     const plan = ops.planBulkRoles([{ email: 'a@databeat.io', role: 'lead' }, { email: 'b@gmail.com', role: 'lead' }, { email: 'c@databeat.io', role: 'boss' }, { email: 'a@databeat.io', role: 'lead' }], 'admin');
     expect(plan.ok.length).toBe(1); expect(plan.errors.length).toBe(3);
     expect(ops.planBulkRoles([{ email: 'a@databeat.io', role: 'admin' }], 'creator').errors[0]).toMatch(/creators can only/);

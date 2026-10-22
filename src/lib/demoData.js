@@ -1,16 +1,16 @@
 // Sample data for DEMO MODE only. Nothing here is used once Firebase is configured.
 import { newQuestion, newQuiz, toDocs, indexItem } from './quizModel.js';
-import { gradeQuiz } from './scoring.js';
+import { gradeQuiz, applyMovement, topRows } from './scoring.js';
 import { monthName, yearOf, DAY, fromIst, istParts } from './time.js';
 import { CONFIG } from '../config.js';
 
 function rng(seed) { let a = seed; return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
 export const PERSONAS = [
-  { uid: 'u_participant', email: 'participant@databeat.io', name: 'Priya (participant)', role: 'participant' },
-  { uid: 'u_lead', email: 'lead@databeat.io', name: 'Lakshmi (lead)', role: 'lead' },
-  { uid: 'u_creator', email: 'creator@databeat.io', name: 'Charan (creator)', role: 'creator' },
-  { uid: 'u_admin', email: CONFIG.bootstrapAdmin, name: 'Sai Teja (admin)', role: 'admin' }
+  { uid: 'u_participant', email: 'participant@databeat.io', name: 'Priya Sharma', role: 'participant' },
+  { uid: 'u_lead', email: 'lead@databeat.io', name: 'Lakshmi', role: 'lead' },
+  { uid: 'u_creator', email: 'creator@databeat.io', name: 'Charan', role: 'creator' },
+  { uid: 'u_admin', email: CONFIG.bootstrapAdmin, name: 'Sai Teja', role: 'admin' }
 ];
 const NAMES = ['Aarav K', 'Diya M', 'Ishaan R', 'Meera S', 'Kabir T', 'Anaya P', 'Vihaan G', 'Saanvi N', 'Reyansh D', 'Myra B', 'Arjun V', 'Kiara L', 'Rohan C', 'Navya H', 'Ayaan J', 'Tara F', 'Dev A', 'Ira Q', 'Neel W', 'Zoya E', 'Yash U', 'Riya O', 'Om Z', 'Siya X', 'Krish Y', 'Pari I', 'Veer S', 'Mahi K'];
 
@@ -33,7 +33,7 @@ function quizSets(now) {
       sample('tf', { id: 'd1', text: 'A viewable display impression needs at least 50% of pixels in view for 1 continuous second.', correct: true, explanation: 'This is the MRC standard for display.' }),
       sample('mcq', { id: 'd2', text: 'Which line item type usually has the highest delivery priority in an ad server?', options: ['Sponsorship', 'House', 'Price priority', 'Bulk'], correct: 0, explanation: 'Sponsorship items are guaranteed and prioritised.' })] },
       { id: 's2', title: 'Opinion', questions: [sample('text', { id: 'd3', text: 'Media agencies are adding audit tools to monitor AI agents that buy media.', ask: 'Would you let an AI agent manage budgets autonomously? Explain.', strong: 'A clear position, the controls you would require (approval thresholds, spend caps, audit logs), and the trade-off you accept.' }), sample('text', { id: 'd4', text: 'Chrome is adding ways to measure ad overload.', ask: 'Would you reduce ad load if it cut impressions? Why or why not?', strong: 'A clear recommendation, the trade-off, and how you would test it.' })] }] },
-    { id: 'z_oct2', ago: 1, live: true, autoSubmit: true, allowReview: true, sections: [
+    { id: 'z_oct2', ago: 1, live: true, sections: [
       { id: 's1', title: 'Multiple choice', intro: 'Trust your knowledge, think carefully, and choose wisely. Every answer counts!', questions: [
         sample('mcq', { id: 'e1', text: 'A publisher runs a campaign with a frequency cap of 3 impressions per day. The campaign already served 3 impressions for a particular user, but continues to serve the ads for the same user.', ask: 'What is the most likely reason for serving impressions for the same user even after reaching the FC?', options: ['The campaign can continue serving because every new ad request counts as a new user.', 'The campaign will automatically increase its CPM to compete for the next request.', 'The campaign will be eligible against the requests due to missing correlator value.', "The campaign will continue to serve if the user's cookies are disabled, though it is set with frequency capping."], correct: 2, explanation: '[Sample answer for the demo. The real explanation is written by the quiz creator.]' }),
         sample('mcq', { id: 'e2', text: 'A publisher has an eligible Standard line item that is "Behind schedule". Its rate is lower than the eligible Ad Exchange winning bid value.', ask: 'Conclude which line item will win and record the impressions considering the CPM values.', options: ['The AdX has higher CPM and always takes priority over every other line item type.', 'The Standard line item will serve as it is behind schedule and the Temp CPM value will automatically override any other competing campaigns rate.', 'Any campaign can be randomly served.', 'No, because Ad Exchange always wins whenever it has a valid bid.'], correct: 3, explanation: '[Sample answer for the demo. The real explanation is written by the quiz creator.]' })] },
@@ -69,13 +69,13 @@ function genAnswer(q, k, ok, r) {
 
 export function buildDemo(now) {
   const D = {}; const rand = rng(42);
-  D['settings/app'] = { leaderboardVisibility: 'leads', thresholds: [0, 20, 50, 100, 160], defaultMascots: ['robot'], integrations: { gas: false }, retention: 'forever', highlightDays: 5 };
+  D['settings/app'] = { leaderboardVisibility: 'leads', showMovement: true, newQuizDefaults: { autoSubmit: false, allowReviewRequests: false }, emails: { closingReminder: true, releaseNotice: true }, thresholds: [0, 20, 50, 100, 160], defaultMascots: ['robot'], integrations: { gas: false }, retention: 'forever', highlightDays: 5 };
   D['roles/lead@databeat.io'] = { role: 'lead', addedBy: CONFIG.bootstrapAdmin, addedAt: now };
   D['roles/creator@databeat.io'] = { role: 'creator', addedBy: CONFIG.bootstrapAdmin, addedAt: now };
   D['roles/admin.two@databeat.io'] = { role: 'admin', addedBy: CONFIG.bootstrapAdmin, addedAt: now };
   const users = [...PERSONAS.map((p) => ({ uid: p.uid, email: p.email, name: p.name })), ...NAMES.map((n, i) => ({ uid: 'u_s' + i, email: n.toLowerCase().replace(/[^a-z]/g, '.') + '@databeat.io', name: n, skill: 0.4 + rand() * 0.55 }))];
-  users.forEach((u) => { D['users/' + u.uid] = { name: u.name, email: u.email, prefs: {} }; });
-  const items = {}; const stats = {};
+  users.forEach((u) => { D['users/' + u.uid] = { name: u.name, email: u.email, prefs: { tourDone: true } }; });
+  const items = {}; const stats = {}; let prevRows = null;
   quizSets(now).forEach((a) => {
     const { quiz, key } = toDocs(a);
     D['quizzes/' + a.id] = { ...quiz, published: true };
@@ -94,13 +94,14 @@ export function buildDemo(now) {
       responses.forEach((r) => { D[`responses/${a.id}_${r.uid}`] = { ...r, startedAt: a.opens + DAY, submittedAt: a.opens + DAY }; });
       Object.entries(written).forEach(([qid, scores]) => { D[`writtenScores/${a.id}_${qid}`] = { scores }; });
       const g = gradeQuiz({ quiz, key, responses, written, autoSubmit: false });
+      const mv = applyMovement(g.rows, prevRows ? { rows: prevRows } : null); g.pub.top = topRows(g.rows); g.pub.prevCount = mv.prevCount; g.pub.comparable = mv.comparable; prevRows = g.rows.map((r) => ({ uid: r.uid, rank: r.rank, total: r.total }));
       g.rows.forEach((r) => {
-        D[`myResults/${a.id}_${r.uid}`] = { uid: r.uid, quizId: a.id, total: r.total, max: r.max, rank: r.rank, count: g.rows.length, sections: r.sections, questions: r.questions, auto: r.auto };
+        D[`myResults/${a.id}_${r.uid}`] = { uid: r.uid, quizId: a.id, total: r.total, max: r.max, rank: r.rank, count: g.rows.length, sections: r.sections, questions: r.questions, auto: r.auto, prevRank: r.prevRank, prevTotal: r.prevTotal, prevCount: mv.prevCount, move: r.move, missingRequired: r.missingRequired };
         stats[r.uid] = stats[r.uid] || { history: {} };
         stats[r.uid].history[a.id] = { score: r.total, max: r.max, opens: a.opens, title: a.title };
       });
       D['resultsPublic/' + a.id] = g.pub;
-      D['resultsFull/' + a.id] = { rows: g.rows.map((r) => ({ rank: r.rank, uid: r.uid, name: r.name, email: r.email, total: r.total, auto: r.auto, sections: r.sections })) };
+      D['resultsFull/' + a.id] = { prevCount: mv.prevCount, comparable: mv.comparable, prevTitle: '', rows: g.rows.map((r) => ({ rank: r.rank, uid: r.uid, name: r.name, email: r.email, total: r.total, auto: r.auto, missingRequired: r.missingRequired, prevRank: r.prevRank, move: r.move, sections: r.sections })) };
       flags.submittedCount = g.rows.length; flags.avgScore = g.pub.avg;
     } else {
       key.released = false;

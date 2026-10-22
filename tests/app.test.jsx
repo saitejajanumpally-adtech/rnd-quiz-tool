@@ -29,6 +29,10 @@ describe('participant journey', () => {
     const dlg = await screen.findByRole('dialog');
     expect(within(dlg).getByText(/can't change your answers/)).toBeTruthy();
     fireEvent.click(within(dlg).getByRole('button', { name: 'Submit quiz' }));
+    // right after confirming: the finish moment, then Continue leads to the locked screen
+    expect(await screen.findByText(/Round complete, Priya/)).toBeTruthy();
+    expect(screen.getByText('Answered')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
     expect((await screen.findAllByText(/Answers are locked/)).length).toBeGreaterThan(0);
     const r = await store.get('responses/z_oct2_u_participant'); expect(r.submitted).toBe(true);
     // the database layer refuses nothing in demo mode, so make sure the UI will not let them back in

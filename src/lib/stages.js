@@ -13,14 +13,16 @@ export function stageFor(points, thresholds = DEFAULT_THRESHOLDS) {
 }
 
 // history: { [quizId]: { score, max, opens, title } }; ordered: quiz index items sorted oldest to newest (closed or released only)
-export function summarize(history = {}, orderedClosedIds = []) {
-  const entries = Object.entries(history);
+// liveIds (optional): ids of quizzes still in the Library list. Quizzes that were archived are left out of points, rounds, average and streak.
+export function summarize(history = {}, orderedClosedIds = [], liveIds = null) {
+  const live = liveIds ? new Set(liveIds) : null;
+  const entries = Object.entries(history).filter(([id]) => !live || live.has(id));
   const rounds = entries.length;
   const points = entries.reduce((a, [, h]) => a + (h.score || 0), 0);
   const avg = rounds ? points / rounds : 0;
   let streak = 0;
   for (let i = orderedClosedIds.length - 1; i >= 0; i--) {
-    if (history[orderedClosedIds[i]]) streak++; else break;
+    if (live ? (live.has(orderedClosedIds[i]) && history[orderedClosedIds[i]]) : history[orderedClosedIds[i]]) streak++; else break;
   }
   return { rounds, points: Math.round(points * 2) / 2, avg, streak };
 }

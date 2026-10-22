@@ -5,41 +5,46 @@ import { quizStatus } from './lib/quizModel.js';
 import { isStaff, ROLE_LABEL } from './lib/ops.js';
 import { CONFIG } from './config.js';
 import { Spinner } from './components/ui.jsx';
+import Tour from './components/Tour.jsx';
+import { Bolt, MascotPic } from './components/mascots.jsx';
 import Arena from './pages/Arena.jsx';
 import QuizPage from './pages/QuizPage.jsx';
 import { Library, LibraryDetail } from './pages/Library.jsx';
-import Leaderboard from './pages/Leaderboard.jsx';
+import Leaderboard, { FullLeaderboard } from './pages/Leaderboard.jsx';
 import Profile from './pages/Profile.jsx';
 import { ManageList, ManageQuiz } from './pages/Manage.jsx';
 import Editor from './pages/Editor.jsx';
 import { RolesPage, AdminSettings } from './pages/Admin.jsx';
 
 function SignIn() {
-  const { authError } = useApp(); const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  const { authError, bye } = useApp(); const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
   const personas = store.kind === 'demo' ? (store.personas || null) : null;
   const [list, setList] = useState([]);
   useEffect(() => { store.ready.then((b) => b.personas && setList(b.personas)); }, []);
   const google = async () => { setBusy(true); setErr(''); try { await store.auth.signIn(); } catch (e) { setErr(e.code === 'auth/popup-closed-by-user' ? '' : 'Sign-in failed. ' + (e.message || '')); } setBusy(false); };
   return (
     <div className="signin"><div className="card teal pad">
+      {bye && <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 6 }}><Bolt moment="goodbye" card={false} size={96} /></div>}
+      {bye === 'removed' && <p className="fg2" style={{ margin: '0 0 14px' }}>Your profile was removed. Your quiz history is kept. Sign in again any time and it reconnects.</p>}
       <div className="mark" style={{ margin: '0 auto 16px', width: 48, height: 48, fontSize: 20 }}>M</div>
       <div className="h2" style={{ marginBottom: 6 }}>{CONFIG.appName}</div>
       <p className="fg2" style={{ marginBottom: 22 }}>Sign in with your @{CONFIG.domain} account to take the quiz and see results.</p>
       {list.length > 0 ? (<>
         <div className="demo" style={{ borderRadius: 10, border: '1px solid rgba(224,160,75,.4)', marginBottom: 6 }}>Demo mode with sample data. Pick a role to try.</div>
-        {list.map((p) => <button key={p.uid} className="persona" onClick={() => store.auth.signIn(p.uid)}><b style={{ fontWeight: 500 }}>{p.name}</b><div className="small muted">{p.email}</div></button>)}
+        {list.map((p) => <button key={p.uid} className="persona" onClick={() => store.auth.signIn(p.uid)}><b style={{ fontWeight: 500 }}>{p.name}</b><div className="small muted">{p.role[0].toUpperCase() + p.role.slice(1)} · {p.email}</div></button>)}
       </>) : <button className="btn p cta" disabled={busy} onClick={google}>{busy ? 'Opening Google…' : 'Sign in with Google'}</button>}
       {(authError || err) && <div role="alert" className="small" style={{ color: 'var(--danger)', marginTop: 16 }}>{authError || err}</div>}
     </div></div>
   );
 }
 
-function NavLink({ to, children, dot }) {
+function NavLink({ to, children, dot, tour }) {
   const { path } = useApp(); const on = to === '/' ? path === '/' : path.startsWith(to);
-  return <a href={'#' + to} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined}>{children}{dot && <span className="dot" aria-label="New" />}</a>;
+  return <a href={'#' + to} data-tour={tour} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined}>{children}{dot && <span className="dot" aria-label="New" />}</a>;
 }
 function Shell({ children }) {
-  const { user, role, index, now, path, signOut, settings, demo } = useApp(); const [open, setOpen] = useState(false); const ref = useRef(null);
+  const { user, role, index, now, path, signOut, settings, demo, prefs, tourOpen, openTour } = useApp(); const [open, setOpen] = useState(false); const ref = useRef(null); const tourAuto = useRef(false);
+  useEffect(() => { if (!prefs.tourDone && !tourAuto.current) { tourAuto.current = true; openTour(); } }, [prefs.tourDone]); // eslint-disable-line
   const latest = Object.values(index).filter((i) => i.released).sort((a, b) => b.releasedAt - a.releasedAt)[0];
   const [seen, setSeen] = useState(() => localStorage.getItem('arena-seen-release') || '');
   useEffect(() => { if (latest && (path.startsWith('/library') || path.startsWith('/leaderboard'))) { localStorage.setItem('arena-seen-release', latest.id); setSeen(latest.id); } }, [path, latest && latest.id]); // eslint-disable-line
@@ -53,15 +58,16 @@ function Shell({ children }) {
         <header className="topbar">
           <a href="#/" className="brand"><span className="mark">M</span>{CONFIG.appName}</a>
           <nav className="nav" aria-label="Main">
-            <NavLink to="/">Arena</NavLink><NavLink to="/library" dot={fresh}>Quiz library</NavLink><NavLink to="/leaderboard" dot={fresh}>Leaderboard</NavLink>
+            <NavLink to="/" tour="arena">Arena</NavLink><NavLink to="/library" dot={fresh} tour="library">Quiz library</NavLink><NavLink to="/leaderboard" dot={fresh} tour="leaderboard">Leaderboard</NavLink>
             {isStaff(role) && <NavLink to="/manage">Manage quizzes</NavLink>}
           </nav>
           <div className="who" ref={ref}>
-            <button className="avatar-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}><span className="avatar">{(user.name || '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}</span><span className="fg2">Menu</span></button>
+            <button className="avatar-btn" data-tour="menu" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}><span className="avatar">{(user.name || '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}</span><span className="fg2">Menu</span></button>
             {open && (
               <div className="menu" role="menu">
                 <div className="head"><span className="avatar">{(user.name || '?')[0]}</span><div><div>{user.name}</div><div className="small muted">{ROLE_LABEL[role]} · {user.email}</div></div></div>
                 <a role="menuitem" href="#/profile">Profile and progress</a>
+                <button role="menuitem" onClick={() => { setOpen(false); openTour(); }}>Take the tour</button>
                 {isStaff(role) && <a role="menuitem" href="#/roles">{role === 'admin' ? 'Roles (everyone)' : 'Roles (leads and participants)'}</a>}
                 {role === 'admin' && <a role="menuitem" href="#/admin">Admin settings</a>}
                 <button role="menuitem" onClick={signOut}>Sign out</button>
@@ -71,19 +77,20 @@ function Shell({ children }) {
         </header>
         <main>{children}</main>
       </div>
+      {tourOpen && <Tour />}
     </>
   );
 }
-const Denied = () => <div className="card mt"><div className="h3" style={{ marginBottom: 6 }}>You don't have access to this page</div><div className="fg2">Ask an admin if you need it. <a href="#/">Back to the Arena</a></div></div>;
+const Denied = () => <div className="card mt"><div className="row center"><MascotPic moment="noAccess" size={96} /><div><div className="h3" style={{ marginBottom: 6 }}>You don't have access to this page</div><div className="fg2">Ask an admin if you need it. <a href="#/">Back to the Arena</a></div></div></div></div>;
 
 function Router() {
-  const { path, role } = useApp(); const [, a, b] = path.split('/');
+  const { path, role, settings } = useApp(); const [, a, b, c] = path.split('/');
   const staff = isStaff(role);
   switch (a || '') {
     case '': return <Arena />;
     case 'quiz': return <QuizPage id={b} key={b} />;
     case 'library': return b ? <LibraryDetail id={b} key={b} /> : <Library />;
-    case 'leaderboard': return <Leaderboard id={b} key={b} />;
+    case 'leaderboard': return c === 'full' ? <FullLeaderboard id={b} key={b} /> : <Leaderboard id={b} key={b} />;
     case 'profile': return <Profile />;
     case 'manage': return staff ? (b ? <ManageQuiz id={b} key={b} /> : <ManageList />) : <Denied />;
     case 'edit': return staff ? <Editor id={b} key={b} /> : <Denied />;

@@ -24,17 +24,33 @@ service cloud.firestore {
     function isLead()    { return signedIn() && roleOf() == 'lead'; }
     function isStaff()   { return isAdmin() || isCreator(); }
 
-    // ---------- quiz helpers ----------
-    function released(q) {
-      return get(/databases/$(database)/documents/quizKeys/$(q)).data.released == true;
+    // A person who removed their profile cannot start or change answers until they sign in again.
+    // Their past answers and scores are not touched.
+    function profileActive() {
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('deleted', false) != true;
     }
-    function canEditQuiz(q) {
-      let z = get(/databases/$(database)/documents/quizzes/$(q)).data;
-      return isAdmin() || (isCreator() && (z.ownerEmail == me() || me() in z.editors));
+
+    // ---------- quiz helpers ----------
+    function isArchived(q) {
+      return get(/databases/$(database)/documents/quizKeys/$(q)).data.get('archived', false) == true;
+    }
+    // Released AND not archived.
+    function released(q) {
+      let k = get(/databases/$(database)/documents/quizKeys/$(q)).data;
+      return k.released == true && k.get('archived', false) != true;
+    }
+    // Admins see everything. Creators see everything except archived quizzes.
+    function staffSees(q) { return isAdmin() || (isStaff() && !isArchived(q)); }
+    // Every creator can edit every quiz (agreed). Only admins can archive, restore or delete.
+    function canEditQuiz(q) { return isAdmin() || isCreator(); }
+    function archiveUnchanged() {
+      return request.resource.data.get('archived', false) == resource.data.get('archived', false);
     }
     function quizOpen(q) {
       let z = get(/databases/$(database)/documents/quizzes/$(q)).data;
       return z.published == true
+        && z.get('archived', false) != true
         && request.time.toMillis() >= z.opens
         && request.time.toMillis() < z.closes;
     }
@@ -60,42 +76,52 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // the small list of quizzes everyone sees
+    // The Library list everyone sees is quizIndex/main. Archived quizzes live in quizIndex/archived, which only admins can read or write.
     match /quizIndex/{d} {
-      allow read: if signedIn();
-      allow write: if isStaff();
+      allow read: if signedIn() && (d != 'archived' || isAdmin());
+      allow write: if (d != 'archived' && isStaff()) || (d == 'archived' && isAdmin());
     }
 
     // ---------- quizzes: questions are readable only once the quiz has opened ----------
     match /quizzes/{id} {
-      allow get: if signedIn() && ((resource.data.published == true && request.time.toMillis() >= resource.data.opens)
-        || isStaff());
-      allow list: if isStaff();
+      allow get: if signedIn() && (
+          isAdmin()
+          || (resource.data.get('archived', false) != true
+              && (isStaff() || (resource.data.published == true && request.time.toMillis() >= resource.data.opens))));
+      // the app never lists this collection; only admins may
+      allow list: if isAdmin();
       allow create: if isAdmin() || (isCreator() && request.resource.data.ownerEmail == me());
-      allow update: if isAdmin()
-        || (isCreator() && (resource.data.ownerEmail == me() || me() in resource.data.editors));
+      allow update: if isAdmin() || (isCreator() && archiveUnchanged());
+      // admin-only delete, and only for quizzes that were never released (the app also refuses if anyone has responded)
       allow delete: if isAdmin()
-        || (isCreator() && resource.data.ownerEmail == me() && resource.data.published == false);
+        && !(exists(/databases/$(database)/documents/quizKeys/$(id))
+             && get(/databases/$(database)/documents/quizKeys/$(id)).data.released == true);
     }
 
     // the answer key (correct answers, rubrics, explanations): staff, or everyone after release
     match /quizKeys/{id} {
-      allow get: if signedIn() && (resource.data.released == true || isStaff());
-      allow list: if isStaff();
-      allow create, update, delete: if canEditQuiz(id);
+      allow get: if signedIn() && (
+          isAdmin()
+          || (resource.data.get('archived', false) != true && (resource.data.released == true || isStaff())));
+      allow list: if isAdmin();
+      allow create: if canEditQuiz(id);
+      allow update: if isAdmin() || (canEditQuiz(id) && archiveUnchanged());
+      allow delete: if isAdmin();
     }
 
     // ---------- responses: one per person per quiz; locked once submitted or closed ----------
     match /responses/{rid} {
-      allow get: if signedIn() && (rid.matches('.*_' + request.auth.uid) || isStaff());
-      allow list: if isStaff();
+      // Raw answers of an archived quiz can be read by admins only. Creators keep their access to active quizzes.
+      allow get: if signedIn() && (rid.matches('.*_' + request.auth.uid) || staffSees(resource.data.quizId));
+      allow list: if staffSees(resource.data.quizId);
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && rid == request.resource.data.quizId + '_' + request.auth.uid
         && request.resource.data.email == me()
         && request.resource.data.submitted == false
         && request.resource.data.keys().hasOnly(['quizId', 'uid', 'email', 'name', 'answers', 'submitted', 'startedAt', 'updatedAt'])
-        && quizOpen(request.resource.data.quizId);
+        && quizOpen(request.resource.data.quizId)
+        && profileActive();
       // the person's own branch comes first: it is the common case and costs the fewest database reads
       allow update: if (signedIn()
             && resource.data.uid == request.auth.uid
@@ -103,7 +129,8 @@ service cloud.firestore {
             && request.resource.data.uid == resource.data.uid
             && request.resource.data.diff(resource.data).affectedKeys()
                  .hasOnly(['answers', 'updatedAt', 'submitted', 'submittedAt'])
-            && quizOpen(resource.data.quizId))
+            && quizOpen(resource.data.quizId)
+            && profileActive())
         || isStaff();
       allow delete: if isAdmin();
     }
@@ -111,17 +138,18 @@ service cloud.firestore {
     // ---------- results: written by staff, readable only after release ----------
     match /myResults/{rid} {
       allow get: if signedIn() && ((rid.matches('.*_' + request.auth.uid) && (resource == null || released(resource.data.quizId)))
-        || isStaff());
-      allow list: if isStaff();
+        || isAdmin()
+        || (isStaff() && resource != null && !isArchived(resource.data.quizId)));
+      allow list: if isAdmin();
       allow write: if isStaff();
     }
     match /resultsPublic/{q} {
-      allow get: if signedIn() && (released(q) || isStaff());
+      allow get: if signedIn() && (released(q) || staffSees(q));
       allow write: if isStaff();
     }
     match /resultsFull/{q} {
       allow get: if signedIn() && ((released(q) && ((isLead() && leaderboardSetting() != 'staff') || leaderboardSetting() == 'everyone'))
-        || isStaff());
+        || staffSees(q));
       allow write: if isStaff();
     }
     match /stats/{u} {
@@ -133,14 +161,31 @@ service cloud.firestore {
     }
 
     // ---------- people ----------
+    // A person reads their own record; staff read any single record; only admins can list everyone (Users export).
+    // "Delete my account" sets deleted = true. The record stays, so admins keep the full history.
+    // Nobody can delete a user record or change another person's.
     match /users/{u} {
       allow get: if signedIn() && (u == request.auth.uid || isStaff());
+      allow list: if isAdmin();
       allow create: if signedIn() && u == request.auth.uid
         && request.resource.data.email == me()
-        && request.resource.data.keys().hasOnly(['name', 'email', 'lastSeen', 'prefs']);
+        && request.resource.data.keys().hasOnly(['name', 'email', 'lastSeen', 'firstSeen', 'prefs', 'deleted', 'deletedAt'])
+        && request.resource.data.get('deleted', false) == false;
       allow update: if signedIn() && u == request.auth.uid
         && request.resource.data.email == me()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'email', 'lastSeen', 'prefs']);
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['name', 'email', 'lastSeen', 'prefs', 'deleted', 'deletedAt']);
+      allow delete: if false;
+    }
+
+    // A tiny public marker so leaderboards can grey the name of someone who removed their profile.
+    // It holds no personal details, and a person can only add or remove their own.
+    match /profileStatus/{u} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && u == request.auth.uid
+        && request.resource.data.keys().hasOnly(['removed', 'at'])
+        && request.resource.data.removed == true;
+      allow delete: if signedIn() && u == request.auth.uid;
     }
 
     // ---------- requests, log and outbox ----------
