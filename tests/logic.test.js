@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { fromIst, istParts, suggestSchedule, nextTuesdayAfter, rangeStart, fmtRange, fmtDateTime, toInputValue, fromInputValue, DAY } from '../src/lib/time.js';
 import { stageFor, summarize, DEFAULT_THRESHOLDS } from '../src/lib/stages.js';
 import { parseCsv, toCsv, toObjects } from '../src/lib/csv.js';
-import { newQuiz, newQuestion, toDocs, fromDocs, validate, quizStatus, fillTemplate, maxScore, permutation } from '../src/lib/quizModel.js';
+import { newQuiz, newQuestion, toDocs, fromDocs, validate, questionErrors, quizStatus, fillTemplate, maxScore, permutation } from '../src/lib/quizModel.js';
 import { scoreAuto, gradeQuiz, isAnswered } from '../src/lib/scoring.js';
 import { buildWrittenExport, parseWrittenUpload } from '../src/lib/written.js';
 
@@ -78,6 +78,30 @@ describe('quiz model', () => {
     const bad = sampleAuthoring(); bad.title = ''; bad.sections[0].questions[0].options[0] = '';
     expect(validate(bad).length).toBe(2);
     const t = sampleAuthoring(); t.closes = 500; expect(validate(t)[0]).toMatch(/after the open/);
+  });
+  it('a new MCQ/picture question has no correct answer preselected, and questionErrors catches it', () => {
+    expect(newQuestion('mcq').correct).toBe(null);
+    expect(newQuestion('picture').correct).toBe(null);
+    expect(newQuestion('multi').correct).toEqual([]);
+    const q = { ...newQuestion('mcq'), text: 'Q?', options: ['A', 'B'] };
+    expect(questionErrors(q)).toContain('mark the correct answer.');
+    expect(questionErrors({ ...q, correct: 0 })).not.toContain('mark the correct answer.');
+  });
+  it('flags duplicate option text, case- and whitespace-insensitively', () => {
+    const q = { ...newQuestion('mcq'), text: 'Q?', correct: 0, options: ['Same', ' same ', 'Different'] };
+    expect(questionErrors(q)).toContain('remove the duplicate option text.');
+    expect(questionErrors({ ...q, options: ['A', 'B', 'C'] })).not.toContain('remove the duplicate option text.');
+  });
+  it('removing the correct option clears the answer instead of silently falling back to another option', () => {
+    // mirrors Editor.jsx's optsWithCorrect removeOption logic
+    const removeOption = (q, i) => { const shift = (x) => (x > i ? x - 1 : x); return q.correct == null || q.correct === i ? null : shift(q.correct); };
+    expect(removeOption({ correct: 1 }, 1)).toBe(null);
+    expect(removeOption({ correct: 2 }, 0)).toBe(1);
+  });
+  it('round-trips a question with no correct answer set without defaulting it to option 1', () => {
+    const a = sampleAuthoring(); a.sections[0].questions[0].correct = null;
+    const { quiz, key } = toDocs(a); const back = fromDocs(a.id, quiz, key);
+    expect(back.sections[0].questions[0].correct).toBe(null);
   });
   it('round-trips authoring -> docs -> authoring, hiding answers from the public doc', () => {
     const a = sampleAuthoring(); const { quiz, key } = toDocs(a);

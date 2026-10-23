@@ -11,7 +11,7 @@ export function Countdown({ to, now }) {
 export const Chip = ({ tone = '', children }) => <span className={'chip ' + tone}>{children}</span>;
 export const Switch = ({ on, onChange, title, sub }) => (
   <button className="switch" role="switch" aria-checked={on} onClick={() => onChange(!on)}>
-    <span className="t"><b>{title}</b>{sub && <span>{sub}</span>}</span><span className={'track' + (on ? ' on' : '')} />
+    <span className="t"><b>{title}</b>{sub && <span>{sub}</span>}</span><span className="onoff">{on ? 'On' : 'Off'}</span><span className={'track' + (on ? ' on' : '')} aria-hidden="true" />
   </button>
 );
 export function Seg({ value, options, onChange }) {
@@ -84,7 +84,11 @@ export const Icon = ({ name, size, color }) => ({
   clock: <Svg size={size} color={color}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Svg>,
   cal: <Svg size={size} color={color}><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /></Svg>,
   search: <Svg size={size} color={color}><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></Svg>,
-  chev: <Svg size={size} color={color}><path d="M6 9l6 6 6-6" /></Svg>
+  chev: <Svg size={size} color={color}><path d="M6 9l6 6 6-6" /></Svg>,
+  link: <Svg size={size} color={color}><path d="M10 14a3.5 3.5 0 0 0 4.2.6l2.1-2.1a3.5 3.5 0 0 0-4.9-4.9l-1 1" /><path d="M14 10a3.5 3.5 0 0 0-4.2-.6L7.7 10.5a3.5 3.5 0 0 0 4.9 4.9l1-1" /></Svg>,
+  trash: <Svg size={size} color={color}><path d="M5 7h14" /><path d="M10 11v6M14 11v6" /><path d="M6.5 7 7.3 20a2 2 0 0 0 2 1.9h5.4a2 2 0 0 0 2-1.9L17.5 7" /><path d="M9.5 7V4.8A1 1 0 0 1 10.5 4h3a1 1 0 0 1 1 1V7" /></Svg>,
+  copy: <Svg size={size} color={color}><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></Svg>,
+  menu: <Svg size={size} color={color}><path d="M4 7h16M4 12h16M4 17h16" /></Svg>
 }[name]);
 export const IconCircle = ({ children, size = 44, bg = 'var(--bg1)', bd = 'var(--border2)' }) => <span style={{ width: size, height: size, borderRadius: '50%', background: bg, border: '1px solid ' + bd, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>{children}</span>;
 // A scorecard: icon on top, label and value centered.

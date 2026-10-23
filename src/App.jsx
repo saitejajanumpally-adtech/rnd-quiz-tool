@@ -4,7 +4,7 @@ import { store } from './lib/store.js';
 import { quizStatus } from './lib/quizModel.js';
 import { isStaff, ROLE_LABEL } from './lib/ops.js';
 import { CONFIG } from './config.js';
-import { Spinner } from './components/ui.jsx';
+import { Spinner, Icon } from './components/ui.jsx';
 import Tour from './components/Tour.jsx';
 import { Bolt, MascotPic } from './components/mascots.jsx';
 import Arena from './pages/Arena.jsx';
@@ -43,26 +43,29 @@ function NavLink({ to, children, dot, tour }) {
   return <a href={'#' + to} data-tour={tour} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined}>{children}{dot && <span className="dot" aria-label="New" />}</a>;
 }
 function Shell({ children }) {
-  const { user, role, index, now, path, signOut, settings, demo, prefs, tourOpen, openTour } = useApp(); const [open, setOpen] = useState(false); const ref = useRef(null); const tourAuto = useRef(false);
+  const { user, role, index, now, path, signOut, settings, demo, prefs, tourOpen, openTour } = useApp(); const [open, setOpen] = useState(false); const [navOpen, setNavOpen] = useState(false); const ref = useRef(null); const navRef = useRef(null); const tourAuto = useRef(false);
   useEffect(() => { if (!prefs.tourDone && !tourAuto.current) { tourAuto.current = true; openTour(); } }, [prefs.tourDone]); // eslint-disable-line
   const latest = Object.values(index).filter((i) => i.released).sort((a, b) => b.releasedAt - a.releasedAt)[0];
   const [seen, setSeen] = useState(() => localStorage.getItem('arena-seen-release') || '');
   useEffect(() => { if (latest && (path.startsWith('/library') || path.startsWith('/leaderboard'))) { localStorage.setItem('arena-seen-release', latest.id); setSeen(latest.id); } }, [path, latest && latest.id]); // eslint-disable-line
-  useEffect(() => { const f = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }; document.addEventListener('mousedown', f); return () => document.removeEventListener('mousedown', f); }, []);
-  useEffect(() => setOpen(false), [path]);
+  useEffect(() => { const f = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); if (navRef.current && !navRef.current.contains(e.target)) setNavOpen(false); }; document.addEventListener('mousedown', f); return () => document.removeEventListener('mousedown', f); }, []);
+  useEffect(() => { setOpen(false); setNavOpen(false); }, [path]);
   const fresh = latest && latest.id !== seen && now - latest.releasedAt < (settings.highlightDays || 5) * 86400000;
   return (
     <>
       {demo && <div className="demo">Demo mode: sample data, saved only in this browser. <button onClick={async () => { await store.reset(); location.reload(); }}>Reset demo data</button><button onClick={() => signOut()}>Switch role</button></div>}
       <div className="page">
         <header className="topbar">
-          <a href="#/" className="brand"><span className="mark">M</span>{CONFIG.appName}</a>
-          <nav className="nav" aria-label="Main">
-            <NavLink to="/" tour="arena">Arena</NavLink><NavLink to="/library" dot={fresh} tour="library">Quiz library</NavLink><NavLink to="/leaderboard" dot={fresh} tour="leaderboard">Leaderboard</NavLink>
-            {isStaff(role) && <NavLink to="/manage">Manage quizzes</NavLink>}
-          </nav>
+          <a href="#/" className="brand"><span className="mark">M</span><span>{CONFIG.appName}</span></a>
+          <div ref={navRef}>
+            <button type="button" className="nav-toggle" aria-label={navOpen ? 'Close menu' : 'Open menu'} aria-expanded={navOpen} aria-controls="main-nav" onClick={() => setNavOpen(!navOpen)}><Icon name="menu" size={18} /></button>
+            <nav id="main-nav" className={'nav' + (navOpen ? ' open' : '')} aria-label="Main">
+              <NavLink to="/" tour="arena">Arena</NavLink><NavLink to="/library" dot={fresh} tour="library">Quiz library</NavLink><NavLink to="/leaderboard" dot={fresh} tour="leaderboard">Leaderboard</NavLink>
+              {isStaff(role) && <NavLink to="/manage">Manage quizzes</NavLink>}
+            </nav>
+          </div>
           <div className="who" ref={ref}>
-            <button className="avatar-btn" data-tour="menu" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}><span className="avatar">{(user.name || '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}</span><span className="fg2">Menu</span></button>
+            <button className="avatar-btn" data-tour="menu" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}><span className="avatar">{(user.name || '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}</span><span className="fg2 avatar-label">Menu</span></button>
             {open && (
               <div className="menu" role="menu">
                 <div className="head"><span className="avatar">{(user.name || '?')[0]}</span><div><div>{user.name}</div><div className="small muted">{ROLE_LABEL[role]} · {user.email}</div></div></div>

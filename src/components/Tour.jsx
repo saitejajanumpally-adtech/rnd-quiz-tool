@@ -29,7 +29,7 @@ export default function Tour() {
       {placed ? <div className="tour-hl" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }} /> : <div className="tour-bg" />}
       <div className="tour-dim" onClick={() => {}} />
       <div className={'tour-card' + (placed ? '' : ' center')} style={cardStyle || undefined}>
-        {placed ? <div className="row center" style={{ flexWrap: 'nowrap', gap: 12 }}><Mascot id={step.id} pose={step.pose} size={88} /><div style={{ textAlign: 'left' }}><div className="lab" style={{ color: 'var(--accent)' }}>{NAMES[step.id]}</div><div style={{ fontSize: 17, fontWeight: 500, marginTop: 2 }}>{step.title}</div></div></div>
+        {placed ? <div className="row center" style={{ flexWrap: 'nowrap', gap: 12 }}><Mascot id={step.id} pose={step.pose} size={88} /><div style={{ textAlign: 'left', minWidth: 0 }}><div className="lab" style={{ color: 'var(--accent)' }}>{NAMES[step.id]}</div><div style={{ fontSize: 17, fontWeight: 500, marginTop: 2 }}>{step.title}</div></div></div>
           : <><div style={{ display: 'flex', justifyContent: 'center' }}><Mascot id={step.id} pose={step.pose} size={i === 0 ? 170 : 150} /></div>{i > 0 && <div className="lab" style={{ color: 'var(--accent)', marginTop: 4 }}>{NAMES[step.id]} · Step {i + 1} of {STEPS.length}</div>}<div style={{ fontSize: 22, fontWeight: 500, margin: '6px 0 0', letterSpacing: '-.01em' }}>{step.title}</div></>}
         <p className="fg2" style={{ margin: '10px 0 14px', lineHeight: 1.5, textAlign: placed ? 'left' : 'center' }}>{step.text}</p>
         {i > 0 && <div className="dots mb" aria-hidden="true">{STEPS.map((s, k) => <i key={s.id} className={k === i ? 'on' : ''} />)}</div>}

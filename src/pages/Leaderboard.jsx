@@ -55,8 +55,8 @@ export default function Leaderboard({ id }) {
   return (
     <div className="pan mt">
       <div className="row between center" style={{ alignItems: 'flex-end', marginBottom: 18 }}>
-        <div className="row center" style={{ flexWrap: 'nowrap', gap: 20 }}>
-          <div><div className="lab">The results are in</div><h1 className="h1" style={{ margin: '6px 0' }}>Leaderboard</h1><div className="fg2" style={{ fontSize: 17 }}>A little competition. A lot of learning.</div></div>
+        <div className="row center" style={{ gap: 20 }}>
+          <div style={{ minWidth: 0 }}><div className="lab">The results are in</div><h1 className="h1" style={{ margin: '6px 0' }}>Leaderboard</h1><div className="fg2" style={{ fontSize: 17 }}>A little competition. A lot of learning.</div></div>
           {m.mode !== 'off' && <div style={{ margin: '-8px 0 -18px' }}><Mascot id={m.id} pose="celebrate" size={190} /></div>}
         </div>
         <div className="col" style={{ alignItems: 'flex-end', gap: 8 }}><QuizPicker released={released} qid={qid} /><span className="muted small">{item ? fmtRange(item.opens, item.closes) : ''}{pub ? ` · ${pub.count} participants` : ''}</span></div>
@@ -91,8 +91,8 @@ export default function Leaderboard({ id }) {
             <div className="row between center"><span className="lab" style={{ color: 'var(--accent)' }}>Your round</span>{personalBest && <span className="chip teal">Personal best</span>}</div>
             {mine ? <>
               <div className="h2" style={{ margin: '8px 0 14px' }}>{headline}</div>
-              <div className="row center" style={{ flexWrap: 'nowrap', gap: 18 }}><Ring value={fmtN(mine.total)} max={mine.max} />
-                <div>{mine.prevTotal != null && showMove ? <><div>{mine.total > mine.prevTotal ? 'Up' : mine.total < mine.prevTotal ? 'Down' : 'Same as'} {mine.total === mine.prevTotal ? '' : 'from '}{fmtN(mine.prevTotal)} last round</div>{mine.total !== mine.prevTotal && <div className="small" style={{ color: mine.total > mine.prevTotal ? 'var(--success)' : 'var(--warn)', marginTop: 4 }}>{mine.total > mine.prevTotal ? '+' : ''}{fmtN(mine.total - mine.prevTotal)} points</div>}</> : <div className="fg2">{pub ? `The average was ${pub.avg}.` : ''}</div>}</div></div>
+              <div className="row center" style={{ gap: 18 }}><Ring value={fmtN(mine.total)} max={mine.max} />
+                <div style={{ minWidth: 0 }}>{mine.prevTotal != null && showMove ? <><div>{mine.total > mine.prevTotal ? 'Up' : mine.total < mine.prevTotal ? 'Down' : 'Same as'} {mine.total === mine.prevTotal ? '' : 'from '}{fmtN(mine.prevTotal)} last round</div>{mine.total !== mine.prevTotal && <div className="small" style={{ color: mine.total > mine.prevTotal ? 'var(--success)' : 'var(--warn)', marginTop: 4 }}>{mine.total > mine.prevTotal ? '+' : ''}{fmtN(mine.total - mine.prevTotal)} points</div>}</> : <div className="fg2">{pub ? `The average was ${pub.avg}.` : ''}</div>}</div></div>
               <div className="row" style={{ marginTop: 18, gap: 10 }}>
                 <div className="tile" style={{ flex: '1 1 90px', padding: 12 }}><div className="lab">Rank</div><div className="v" style={{ fontSize: 22 }}>#{mine.rank}<small> / {mine.count}</small></div></div>
                 <div className="tile" style={{ flex: '1 1 90px', padding: 12 }}><div className="lab">Average</div><div className="v" style={{ fontSize: 22 }}>{pub ? pub.avg : '–'}</div></div>

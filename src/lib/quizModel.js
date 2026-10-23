@@ -20,7 +20,7 @@ export const uid = (p = 'q') => p + Math.random().toString(36).slice(2, 8);
 export function newQuestion(type, id = uid()) {
   const base = { id, type, text: '', ask: '', points: 2, explanation: '', required: false };
   switch (type) {
-    case 'mcq': case 'picture': return { ...base, options: ['', '', '', ''], correct: 0, image: '' };
+    case 'mcq': case 'picture': return { ...base, options: ['', '', '', ''], correct: null, image: '' };
     case 'multi': return { ...base, options: ['', '', '', ''], correct: [], partial: true };
     case 'tf': return { ...base, correct: true };
     case 'text': return { ...base, strong: '', rubric: 'Score 0 to 2 in steps of 0.5. Reward clear reasoning and relevance. Do not reward agreement with a particular view.' };
@@ -78,7 +78,7 @@ export function fromDocs(id, quiz, key) {
     questions: s.questions.map((p) => {
       const k = ans[p.id] || {};
       const q = { id: p.id, type: p.type, text: p.text, ask: p.ask || '', points: p.points, explanation: k.explanation || '', required: !!p.required };
-      if (p.type === 'mcq' || p.type === 'picture') { q.options = [...p.options]; q.correct = k.correct ?? 0; q.image = p.image || ''; }
+      if (p.type === 'mcq' || p.type === 'picture') { q.options = [...p.options]; q.correct = k.correct ?? null; q.image = p.image || ''; }
       else if (p.type === 'multi') { q.options = [...p.options]; q.correct = k.correct || []; q.partial = k.partial !== false; }
       else if (p.type === 'tf') q.correct = k.correct !== false;
       else if (p.type === 'text') { q.strong = k.strong || ''; q.rubric = k.rubric || ''; }
@@ -101,6 +101,23 @@ export function allQuestions(quiz) {
 export const maxScore = (quiz) => allQuestions(quiz).reduce((a, q) => a + (Number(q.points) || 0), 0);
 export const hasWritten = (quiz) => allQuestions(quiz).some((q) => q.type === 'text');
 
+// Problems with a single question, independent of which section it's in. Used both by validate()
+// below (quiz-wide, prefixed with "Question N: ") and by the Editor's live per-card warning.
+export function questionErrors(q) {
+  const e = [];
+  if (!q.text.trim()) e.push('add the question text.');
+  if (['mcq', 'multi', 'picture'].includes(q.type)) {
+    if (q.options.length < 2 || q.options.some((o) => !String(o).trim())) e.push('fill in at least two options, with no blanks.');
+    else { const nonEmpty = q.options.map((o) => String(o).trim().toLowerCase()); if (new Set(nonEmpty).size !== nonEmpty.length) e.push('remove the duplicate option text.'); }
+    if (q.type === 'multi' ? !q.correct.length : (q.correct == null || q.correct >= q.options.length)) e.push('mark the correct answer.');
+    if (q.type === 'picture' && !q.image) e.push('add the picture.');
+  }
+  if (q.type === 'order' && (q.options.length < 2 || q.options.some((o) => !String(o).trim()))) e.push('list at least two items, in the correct order.');
+  if (q.type === 'match' && (q.pairs.length < 2 || q.pairs.some((p) => !p.l.trim() || !p.r.trim()))) e.push('fill in at least two complete pairs.');
+  if (q.type === 'text' && !(q.rubric || '').trim()) e.push('add a scoring rubric.');
+  if (q.type !== 'rating' && !(Number(q.points) > 0)) e.push('points must be more than 0.');
+  return e;
+}
 export function validate(a) {
   const e = [];
   if (!a.title.trim()) e.push('Give the quiz a name.');
@@ -113,16 +130,7 @@ export function validate(a) {
     if (!s.questions.length) e.push(s.flat ? 'Add at least one question.' : `Section ${si + 1} has no questions.`);
     s.questions.forEach((q, qi) => {
       const n = s.flat ? `Question ${qi + 1}` : `Section ${si + 1}, question ${qi + 1}`;
-      if (!q.text.trim()) e.push(`${n}: add the question text.`);
-      if (['mcq', 'multi', 'picture'].includes(q.type)) {
-        if (q.options.length < 2 || q.options.some((o) => !String(o).trim())) e.push(`${n}: fill in at least two options, with no blanks.`);
-        if (q.type === 'multi' ? !q.correct.length : (q.correct == null || q.correct >= q.options.length)) e.push(`${n}: mark the correct answer.`);
-        if (q.type === 'picture' && !q.image) e.push(`${n}: add the picture.`);
-      }
-      if (q.type === 'order' && (q.options.length < 2 || q.options.some((o) => !String(o).trim()))) e.push(`${n}: list at least two items, in the correct order.`);
-      if (q.type === 'match' && (q.pairs.length < 2 || q.pairs.some((p) => !p.l.trim() || !p.r.trim()))) e.push(`${n}: fill in at least two complete pairs.`);
-      if (q.type === 'text' && !(q.rubric || '').trim()) e.push(`${n}: add a scoring rubric.`);
-      if (q.type !== 'rating' && !(Number(q.points) > 0)) e.push(`${n}: points must be more than 0.`);
+      questionErrors(q).forEach((msg) => e.push(`${n}: ${msg}`));
     });
   });
   return e;

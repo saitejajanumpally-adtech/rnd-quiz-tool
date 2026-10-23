@@ -1,4 +1,4 @@
-:root{--bg:#0E1B22;--bg1:#142430;--bg3:#1F3845;--elev:#1A2C38;--fg:#E8EBEC;--fg2:#B8C5CC;--muted:#8A9CA5;--primary:#2DA9A2;--on-primary:#07221F;--accent:#5FC9C0;--warn:#E0A04B;--success:#3FC094;--danger:#E2745A;--info:#6FB7E0;--border:rgba(255,255,255,.07);--border2:rgba(255,255,255,.14);--teal-border:rgba(45,169,162,.3);--mint-soft:rgba(95,201,192,.12);--r:12px;--mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;--sans:Inter,'Helvetica Neue',Arial,sans-serif}
+:root{color-scheme:dark;--bg:#0E1B22;--bg1:#142430;--bg3:#1F3845;--elev:#1A2C38;--fg:#E8EBEC;--fg2:#B8C5CC;--muted:#8A9CA5;--primary:#2DA9A2;--on-primary:#07221F;--accent:#5FC9C0;--warn:#E0A04B;--success:#3FC094;--danger:#E2745A;--info:#6FB7E0;--border:rgba(255,255,255,.07);--border2:rgba(255,255,255,.14);--teal-border:rgba(45,169,162,.3);--mint-soft:rgba(95,201,192,.12);--r:12px;--mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;--sans:Inter,'Helvetica Neue',Arial,sans-serif}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
 a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
@@ -8,20 +8,38 @@ button{cursor:pointer}
 h1,h2,h3,p{margin:0}
 .page{max-width:1240px;margin:0 auto;padding:0 40px 56px}
 @media(max-width:700px){.page{padding:0 16px 40px}}
-/* top bar */
-.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
-.brand{display:flex;align-items:center;gap:12px;font-weight:500;font-size:16px;color:var(--fg)}
+/* top bar: brand + nav + account menu always share one line (nav collapses to a toggle below 860px) so the
+   account menu can never get shoved onto its own line and mispositioned, however narrow the screen gets. */
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 0;border-bottom:1px solid var(--border);flex-wrap:nowrap;position:relative}
+.brand{display:flex;align-items:center;gap:12px;font-weight:500;font-size:16px;color:var(--fg);min-width:0;flex:0 1 auto}
 .brand:hover{text-decoration:none}
-.mark{width:34px;height:34px;border-radius:8px;background:var(--mint-soft);border:1px solid var(--teal-border);color:var(--accent);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:600}
+.brand span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mark{width:34px;height:34px;border-radius:8px;background:var(--mint-soft);border:1px solid var(--teal-border);color:var(--accent);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:600;flex:none}
+.nav-toggle{display:none;flex:none;align-items:center;justify-content:center;width:38px;height:38px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--fg2)}
+.nav-toggle:hover{color:var(--fg);border-color:var(--fg2)}
 .nav{display:flex;gap:24px;flex-wrap:wrap}
 .nav a{color:var(--fg2);padding:6px 0;position:relative}
 .nav a.on{color:var(--accent);font-weight:500}
 .nav a:hover{text-decoration:none;color:var(--fg)}
 .dot{position:absolute;top:2px;right:-8px;width:7px;height:7px;border-radius:50%;background:var(--warn)}
-.who{position:relative}
+.who{position:relative;flex:none}
 .avatar-btn{display:flex;align-items:center;gap:10px;background:var(--elev);border:1px solid var(--border);border-radius:999px;padding:5px 14px 5px 6px}
 .avatar{width:28px;height:28px;border-radius:50%;background:var(--primary);color:var(--on-primary);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;flex:none}
-.menu{position:absolute;right:0;top:calc(100% + 8px);min-width:260px;background:var(--elev);border:1px solid var(--border2);border-radius:14px;padding:8px;z-index:20;box-shadow:0 12px 32px rgba(0,0,0,.4)}
+.menu{position:absolute;right:0;top:calc(100% + 8px);min-width:260px;max-width:calc(100vw - 32px);background:var(--elev);border:1px solid var(--border2);border-radius:14px;padding:8px;z-index:20;box-shadow:0 12px 32px rgba(0,0,0,.4)}
+@media(max-width:860px){
+  .nav-toggle{display:inline-flex}
+  .nav{display:none;position:absolute;left:0;right:0;top:100%;flex-direction:column;gap:0;background:var(--elev);border:1px solid var(--border2);border-top:0;border-radius:0 0 14px 14px;padding:8px;z-index:25;box-shadow:0 12px 32px rgba(0,0,0,.4)}
+  .nav.open{display:flex}
+  .nav a{padding:12px 14px;border-radius:8px}
+  .nav a:hover{background:var(--bg1)}
+  .nav a.on{background:var(--mint-soft)}
+  .dot{top:14px;right:14px}
+}
+@media(max-width:480px){
+  .avatar-label{display:none}
+  .avatar-btn{padding:5px}
+  .brand span:last-child{max-width:40vw}
+}
 .menu .head{padding:10px;display:flex;gap:10px;align-items:center}
 .menu a,.menu button{display:block;width:100%;text-align:left;padding:10px;border:0;background:none;color:var(--fg2);border-top:1px solid var(--border);border-radius:0}
 .menu a:hover,.menu button:hover{background:var(--bg1);color:var(--fg);text-decoration:none}
@@ -70,9 +88,10 @@ h1,h2,h3,p{margin:0}
 .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
 .switch{display:flex;align-items:center;gap:14px;padding:12px 0;border-top:1px solid var(--border);width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left}
 .switch .t{flex:1}.switch .t b{display:block;font-weight:400}.switch .t span{display:block;font-size:12px;color:var(--muted);margin-top:2px}
-.track{width:44px;height:24px;border-radius:999px;background:var(--bg3);position:relative;flex:none;transition:background 140ms}
-.track::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--fg);transition:left 140ms}
-.track.on{background:var(--primary)}.track.on::after{left:23px}
+.track{width:44px;height:24px;border-radius:999px;background:var(--bg3);border:1px solid var(--border2);position:relative;flex:none;transition:background 140ms}
+.track::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--fg);transition:left 140ms}
+.track.on{background:var(--primary);border-color:var(--primary)}.track.on::after{left:22px}
+.switch .onoff{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);margin-right:8px}
 /* hero + countdown */
 .boxes{display:flex;gap:10px;align-items:center;margin:0 0 24px}
 .box{background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:10px 16px;text-align:center;min-width:72px}
@@ -106,7 +125,7 @@ button.opt:hover{border-color:rgba(45,169,162,.6)}
 .saved.ok{color:var(--success)}.saved.busy{color:var(--muted)}.saved.err{color:var(--danger)}
 .rate{display:flex;gap:8px;flex-wrap:wrap}.rate button{flex:1 1 56px;padding:12px 0;border-radius:10px;background:var(--bg1);border:1px solid var(--border2);color:var(--fg2)}.rate button.sel{background:rgba(45,169,162,.16);border:2px solid var(--primary);color:var(--fg)}
 .pairs{display:flex;flex-direction:column;gap:10px}.pairs .p{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.pairs .p span{flex:1 1 200px;background:var(--bg1);border:1px solid var(--border2);border-radius:10px;padding:10px 14px}
-.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl{width:100%;min-width:560px;border-collapse:collapse;font-size:14px}
 .tbl th{text-align:left;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:500;padding:8px 10px}
 .tbl td{padding:11px 10px;border-top:1px solid var(--border);vertical-align:middle}
 .tbl tr:hover td{background:var(--bg1)}
@@ -202,3 +221,45 @@ button.opt:hover{border-color:rgba(45,169,162,.6)}
 .chip.removed{margin-left:8px}
 .gone-name{color:var(--muted)}
 .subtabs{display:flex;gap:8px;margin-bottom:14px}
+
+/* ---- rich-text field: toolbar merged onto the field instead of floating above it ---- */
+.rtfield{border:1px solid var(--border2);border-radius:10px;overflow:hidden;background:var(--bg1)}
+.rtfield .fmt{margin:0;padding:6px 8px;border-bottom:1px solid var(--border);background:var(--bg)}
+.rtfield .fmt button{border:0;background:transparent;width:28px;height:28px}
+.rtfield .textarea,.rtfield .input{border:0;border-radius:0;background:transparent}
+.rtfield .rich-prev{border-radius:0;border-width:1px 0 0;margin-top:0}
+
+/* ---- correct-answer picker on MCQ/multi-select options ---- */
+.correct-pick{accent-color:var(--primary);width:19px;height:19px;flex:none;cursor:pointer}
+.opt-row{display:flex;align-items:center;gap:10px;border:1px solid var(--border2);border-radius:10px;padding:7px 10px;margin-bottom:8px;background:var(--bg1)}
+.opt-row.correct{border-color:var(--primary);background:rgba(45,169,162,.10)}
+.opt-row .input{flex:1 1 auto;min-width:0;background:transparent;border:0;padding:6px 4px}
+.opt-row .input:focus{box-shadow:none}
+.opt-row .fmt{margin:0}
+.opt-row .fmt button{width:26px;height:26px;border-color:var(--border2)}
+.opt-group{border:1px solid var(--border2);border-radius:12px;padding:14px;margin:0 0 14px}
+.opt-group > legend{padding:0 6px}
+
+/* ---- small ghost icon buttons: remove/reorder/duplicate ---- */
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--fg2);flex:none}
+.icon-btn:hover{background:var(--bg3);color:var(--fg)}
+.icon-btn[disabled]{opacity:.4;cursor:not-allowed;pointer-events:none}
+.icon-btn.danger{color:var(--danger);border-color:rgba(226,116,90,.4)}
+
+/* ---- question card: header, collapsed summary, validity badge ---- */
+.qcard-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 4px}
+.qcard-head .left{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 220px}
+.qcard-actions{display:flex;gap:6px;flex:none}
+.qcard-summary{color:var(--fg2);font-size:13px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---- step tabs: stronger active state, completed check ---- */
+.step-tab.on{background:var(--mint-soft);border-color:var(--primary);color:var(--fg)}
+.step-tab .chk{color:var(--success);margin-right:6px}
+
+/* ---- side-tab layout (Profile, Admin settings): a vertical sidebar on desktop becomes a
+   horizontally-scrolling tab strip on narrow screens, instead of pushing all content below it ---- */
+@media(max-width:760px){
+  .side-tabs{flex-direction:row!important;flex:1 1 100%!important;flex-wrap:nowrap!important;overflow-x:auto;gap:8px!important;padding-bottom:6px;-webkit-overflow-scrolling:touch}
+  .side-tabs .lab{display:none}
+  .side-tabs > *{flex:0 0 auto!important;white-space:nowrap}
+}

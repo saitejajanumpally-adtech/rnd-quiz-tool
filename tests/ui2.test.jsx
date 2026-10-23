@@ -122,6 +122,39 @@ describe('quiz editor', () => {
     await waitFor(() => expect(screen.queryByLabelText('Section 1 title')).toBeNull());
     expect(screen.getByText(/Question 1 · Written answer/)).toBeTruthy();
   });
+  it('a new MCQ question has no correct answer preselected, and Review is blocked until one is set', async () => {
+    render(<App />); await persona('Sai Teja'); await go('#/edit/new'); await screen.findByText('Create quiz');
+    fireEvent.click(screen.getByRole('button', { name: /2 · Questions/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Multiple choice/ }));
+    expect(await screen.findByText(/Question 1 · Multiple choice/)).toBeTruthy();
+    expect(screen.getByText('Incomplete')).toBeTruthy();
+    const radios = screen.getAllByRole('radio', { name: /Mark option \d as correct/ });
+    expect(radios.length).toBe(4);
+    expect(radios.some((r) => r.checked)).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: /4 · Review/ }));
+    expect((await screen.findByRole('status')).textContent).toMatch(/Fix these before Review/);
+    expect(screen.getByText(/Question 1 · Multiple choice/)).toBeTruthy(); // still on Questions, not Review
+    const qBox = screen.getAllByLabelText('Question').find((e) => e.tagName === 'TEXTAREA');
+    fireEvent.change(qBox, { target: { value: 'Pick one' } });
+    ['Alpha', 'Beta', 'Gamma', 'Delta'].forEach((v, i) => fireEvent.change(screen.getByLabelText(`Option ${i + 1}`), { target: { value: v } }));
+    fireEvent.click(screen.getAllByRole('radio', { name: /Mark option \d as correct/ })[0]);
+    expect(screen.queryByText('Incomplete')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /4 · Review/ }));
+    expect(await screen.findByText('Review')).toBeTruthy();
+  });
+  it('removing the option marked correct clears the answer instead of keeping another one correct by accident', async () => {
+    render(<App />); await persona('Sai Teja'); await go('#/edit/new'); await screen.findByText('Create quiz');
+    fireEvent.click(screen.getByRole('button', { name: /2 · Questions/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Multiple choice/ }));
+    const qBox = screen.getAllByLabelText('Question').find((e) => e.tagName === 'TEXTAREA');
+    fireEvent.change(qBox, { target: { value: 'Pick one' } });
+    ['Alpha', 'Beta', 'Gamma', 'Delta'].forEach((v, i) => fireEvent.change(screen.getByLabelText(`Option ${i + 1}`), { target: { value: v } }));
+    fireEvent.click(screen.getAllByRole('radio', { name: /Mark option \d as correct/ })[0]);
+    expect(screen.queryByText('Incomplete')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove option 1' }));
+    expect(screen.getByText('Incomplete')).toBeTruthy();
+    expect(screen.getAllByRole('radio', { name: /Mark option \d as correct/ }).some((r) => r.checked)).toBe(false);
+  });
   it('Cancel leaves straight away when nothing changed, and asks first when something did', async () => {
     render(<App />); await persona('Sai Teja'); await go('#/edit/new'); await screen.findByText('Create quiz');
     fireEvent.change(screen.getByLabelText('Quiz name'), { target: { value: 'My quiz' } });

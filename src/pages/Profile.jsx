@@ -7,7 +7,7 @@ import { Journey, Tile, Seg, Switch } from '../components/ui.jsx';
 import { fmtShort } from '../lib/time.js';
 
 function RemoveDialog({ onCancel, onConfirm, busy }) {
-  const Li = ({ ok, children }) => <div className="row center" style={{ gap: 10, flexWrap: 'nowrap', padding: '4px 0', alignItems: 'flex-start' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: ok ? 'var(--success)' : 'var(--warn)', flex: 'none', marginTop: 7 }} /><span className="fg2">{children}</span></div>;
+  const Li = ({ ok, children }) => <div className="row center" style={{ gap: 10, padding: '4px 0', alignItems: 'flex-start' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: ok ? 'var(--success)' : 'var(--warn)', flex: 'none', marginTop: 7 }} /><span className="fg2" style={{ minWidth: 0 }}>{children}</span></div>;
   return (
     <div className="modal-bg" onClick={onCancel}><div className="modal" role="dialog" aria-modal="true" aria-label="Remove your profile?" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
       <div className="h3" style={{ fontSize: 22, marginBottom: 6 }}>Remove your profile?</div>
@@ -35,7 +35,7 @@ export default function Profile() {
   const doRemove = async () => { setBusy(true); try { await removeProfile(); } catch (e) { toast('Couldn\'t remove your profile. ' + (e.message || ''), 'err'); setRemoving(false); } setBusy(false); };
   return (
     <div className="row mt" style={{ gap: 28 }}>
-      <div className="col" style={{ flex: '0 0 220px', gap: 6 }}>
+      <div className="col side-tabs" style={{ flex: '0 0 220px', gap: 6 }}>
         <div className="lab" style={{ margin: '0 0 6px 8px' }}>Profile</div>
         {tabs.map(([k, l]) => <button key={k} className="sec" style={{ flex: 'none', ...(tab === k ? { background: 'var(--mint-soft)', borderColor: 'var(--primary)' } : { background: 'transparent', borderColor: 'transparent' }) }} aria-current={tab === k} onClick={() => setTab(k)}>{l}</button>)}
       </div>

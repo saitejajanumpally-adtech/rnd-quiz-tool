@@ -46,9 +46,9 @@ function SubmitDialog({ unanswered, closes, onCancel, onSubmit, busy }) {
   return (
     <div className="modal-bg" onClick={onCancel}>
       <div className="modal" role="dialog" aria-modal="true" aria-label="Submit your answers?" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
-        <div className="row center" style={{ flexWrap: 'nowrap', gap: 20 }}>
+        <div className="row center" style={{ gap: 20 }}>
           <MascotPic moment="review" size={130} />
-          <div>
+          <div style={{ minWidth: 0, flex: '1 1 240px' }}>
             <div className="h3" style={{ fontSize: 22, marginBottom: 8 }}>Submit your answers?</div>
             <div className="fg2" style={{ fontSize: 16, lineHeight: 1.5 }}>Once you submit, you can't change your answers.</div>
             <div className="muted small" style={{ marginTop: 10 }}>{unanswered ? `${unanswered} question${unanswered === 1 ? ' is' : 's are'} unanswered and will score 0. ` : 'All questions are answered. '}The quiz closes {fmtDateTime(closes)}.</div>
@@ -189,7 +189,7 @@ export default function QuizPage({ id }) {
         <div className="card teal pad"><div className="eyebrow">Ready to submit</div><div className="h2" style={{ margin: '8px 0 14px' }}>{done} of {total} questions answered</div>
           {!flat && secs.map((s) => { const n = s.questions.filter((q) => isAnswered(answers[q.id])).length; return <div key={s.id} className="row between" style={{ padding: '10px 0', borderTop: '1px solid var(--border)' }}><span>{s.title}</span><span className={'chip ' + (n === s.questions.length ? 'ok' : 'warn')}>{n} of {s.questions.length}</span></div>; })}
           {missingReq.length > 0 && <div style={{ margin: '14px 0', padding: 14, background: 'var(--bg1)', border: '1px solid rgba(224,160,75,.5)', borderRadius: 12 }}>
-            <div className="row center" style={{ gap: 14, flexWrap: 'nowrap' }}><MascotPic moment="requiredLeft" size={84} /><div><div className="lab" style={{ color: 'var(--warn)' }}>Answer these to submit</div><div className="fg2 small" style={{ marginTop: 2 }}>{missingReq.length} required {missingReq.length === 1 ? 'answer' : 'answers'} left.</div></div></div>
+            <div className="row center" style={{ gap: 14 }}><MascotPic moment="requiredLeft" size={84} /><div style={{ minWidth: 0 }}><div className="lab" style={{ color: 'var(--warn)' }}>Answer these to submit</div><div className="fg2 small" style={{ marginTop: 2 }}>{missingReq.length} required {missingReq.length === 1 ? 'answer' : 'answers'} left.</div></div></div>
             {missingReq.map((q) => <div key={q.id} className="row between center" style={{ padding: '10px 0', borderTop: '1px solid var(--border)', marginTop: 8 }}><span>Question {qs.findIndex((x) => x.id === q.id) + 1}{q.sectionTitle ? ' · ' + q.sectionTitle : ''}</span><button className="btn sm s" onClick={() => goTo(q)}>Go to question →</button></div>)}
           </div>}
           {missingReq.length === 0 && !notSynced && <div className="mb" style={{ marginTop: 6 }}><Bolt moment="review" card={false} size={84} /></div>}
