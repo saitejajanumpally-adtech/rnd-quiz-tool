@@ -44,6 +44,8 @@ export function createMemory() {
     },
     async count(coll, opts) { return (await this.list(coll, opts)).length; },
     async batch(ops) { ops.forEach((o) => { if (o.type === 'del') delete data[o.path]; else if (o.type === 'update') Object.entries(o.data).forEach(([k, v]) => (k.includes('.') ? setDeep(data[o.path], k, clone(v)) : (data[o.path][k] = clone(v)))); else data[o.path] = o.merge && data[o.path] ? mergeDeep(data[o.path], o.data) : clone(o.data); }); save(); },
+    // Demo writes land straight in localStorage, so there is nothing to wait on.
+    waitForSync: async () => undefined,
     reset() { data = buildDemo(Date.now()); save(); }
   };
 }

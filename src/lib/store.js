@@ -18,6 +18,7 @@ export const store = {
   list: async (c, o) => (await ready).list(c, o),
   count: async (c, o) => (await ready).count(c, o),
   batch: async (ops) => (await ready).batch(ops),
+  waitForSync: async () => { const b = await ready; return b.waitForSync ? b.waitForSync() : undefined; },
   reset: async () => { const b = await ready; if (b.reset) b.reset(); }
 };
 export const rid = (quizId, uid) => `${quizId}_${uid}`;

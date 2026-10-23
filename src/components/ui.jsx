@@ -38,11 +38,22 @@ export function Funnel({ points, thresholds, compact }) {
     </div>
   );
 }
+// Shared with the pre-submit warning banner, so the status line and the banner never disagree.
+export const SAVE_COPY = {
+  saving: 'Saving your answers…',
+  saved: 'All answers saved.',
+  offline: 'Connection lost. Your latest answers may not be saved. Please check your internet connection.',
+  error: 'Unable to save your answers. Retrying…',
+  blocked: "Your last answer couldn't be saved because this quiz is no longer open to changes. Reload the page before continuing.",
+  idle: 'Answers save as you go'
+};
 export function Saved({ state }) {
-  if (state === 'saving') return <span className="saved busy">Saving…</span>;
-  if (state === 'error') return <span className="saved err" role="alert">Couldn't save. Retrying, keep this tab open.</span>;
-  if (state === 'saved') return <span className="saved ok"><span className="live-dot" />Saved just now</span>;
-  return <span className="saved busy">Answers save as you go</span>;
+  if (state === 'saving') return <span className="saved busy">{SAVE_COPY.saving}</span>;
+  if (state === 'offline') return <span className="saved err" role="alert">{SAVE_COPY.offline}</span>;
+  if (state === 'error') return <span className="saved err" role="alert">{SAVE_COPY.error}</span>;
+  if (state === 'blocked') return <span className="saved err" role="alert">{SAVE_COPY.blocked}</span>;
+  if (state === 'saved') return <span className="saved ok"><span className="live-dot" />{SAVE_COPY.saved}</span>;
+  return <span className="saved busy">{SAVE_COPY.idle}</span>;
 }
 export function useDebounced(fn, ms) {
   const ref = React.useRef({ t: null, fn }); ref.current.fn = fn;

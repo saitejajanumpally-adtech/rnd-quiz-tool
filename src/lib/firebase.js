@@ -1,14 +1,24 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, limit as qlimit, getDocs, writeBatch, getCountFromServer } from 'firebase/firestore';
+import {
+  initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, waitForPendingWrites,
+  doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, limit as qlimit, getDocs, writeBatch, getCountFromServer
+} from 'firebase/firestore';
 import { CONFIG } from '../config.js';
 
 const clean = (o) => JSON.parse(JSON.stringify(o));
 
+// Queues writes locally (IndexedDB) so a dropped connection doesn't lose them: they sync automatically once back online.
+// Falls back to the plain, memory-only client if persistence can't be enabled (e.g. some private-browsing modes).
+function openFirestore(app) {
+  try { return initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
+  catch (e) { return getFirestore(app); }
+}
+
 export function createFirebase(cfg) {
   const app = initializeApp(cfg);
   const fbAuth = getAuth(app);
-  const fs = getFirestore(app);
+  const fs = openFirestore(app);
   const ref = (path) => doc(fs, path);
   const q = (coll, opts = {}) => {
     const parts = (opts.where || []).map(([f, op, v]) => where(f, op, v));
@@ -42,6 +52,8 @@ export function createFirebase(cfg) {
     async del(path) { await deleteDoc(ref(path)); },
     async list(coll, opts) { const s = await getDocs(q(coll, opts)); return s.docs.map((d) => ({ id: d.id, ...d.data() })); },
     async count(coll, opts) { const s = await getCountFromServer(q(coll, opts)); return s.data().count; },
+    // Resolves once every write queued so far (including ones from a dropped connection) is acknowledged by the server.
+    waitForSync: () => waitForPendingWrites(fs),
     async batch(ops) {
       for (let i = 0; i < ops.length; i += 400) {
         const b = writeBatch(fs);

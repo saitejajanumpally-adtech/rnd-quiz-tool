@@ -17,7 +17,7 @@ describe('participant journey', () => {
     await act(async () => { location.hash = '#/quiz/z_oct2'; });
     const opt = await screen.findByRole('button', { name: /missing correlator/ });
     fireEvent.click(opt);
-    await waitFor(() => expect(screen.getByText(/Saved just now/)).toBeTruthy(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByText(/All answers saved/)).toBeTruthy(), { timeout: 3000 });
     expect((await store.get('responses/z_oct2_u_participant')).answers.e1).toBe(2);
     fireEvent.click(screen.getByRole('button', { name: /Next section: Opinion/ }));
     const ta = (await screen.findAllByLabelText('Your answer'))[0];
