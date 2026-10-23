@@ -1,13 +1,16 @@
 // A tiny, safe formatter. Creators type simple markers and nothing is ever turned into raw HTML:
-//   **bold**   *italic*   [link text](https://example.com)   lines starting with "- " become bullets.
+//   **bold**   *italic*   ++underline++   ~~strikethrough~~   [link text](https://example.com)
+//   lines starting with "- " become bullets.
 const LINK = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/;
 const BOLD = /\*\*([^\s*](?:[^*\n]*[^\s*])?)\*\*/;
 const ITAL = /\*([^\s*](?:[^*\n]*[^\s*])?)\*/;
+const UNDL = /\+\+([^\s+](?:[^+\n]*[^\s+])?)\+\+/;
+const STRK = /~~([^\s~](?:[^~\n]*[^\s~])?)~~/;
 
 function inline(s) {
   const out = []; let rest = String(s);
   while (rest) {
-    const found = [['a', LINK], ['b', BOLD], ['i', ITAL]].map(([t, re]) => { const m = re.exec(rest); return m ? { t, m } : null; }).filter(Boolean);
+    const found = [['a', LINK], ['b', BOLD], ['i', ITAL], ['u', UNDL], ['s', STRK]].map(([t, re]) => { const m = re.exec(rest); return m ? { t, m } : null; }).filter(Boolean);
     if (!found.length) { out.push({ t: 'text', v: rest }); break; }
     found.sort((x, y) => x.m.index - y.m.index);
     const { t, m } = found[0];
@@ -32,10 +35,12 @@ const flat = (nodes) => nodes.map((n) => (n.t === 'text' ? n.v : n.t === 'a' ? `
 // Plain text with the markers removed, for exports and previews.
 export const stripRich = (src) => parseRich(src).map((b) => (b.type === 'ul' ? b.items.map((i) => '• ' + flat(i)).join('\n') : flat(b.c))).join('\n');
 // Wraps the selected text of a textarea with markers. Returns { value, start, end }.
+const MARK = { bold: '**', italic: '*', underline: '++', strike: '~~' };
+const PLACEHOLDER = { bold: 'bold text', italic: 'italic text', underline: 'underlined text', strike: 'struck-through text' };
 export function applyFormat(value, start, end, kind, url) {
   const sel = value.slice(start, end);
-  if (kind === 'bold' || kind === 'italic') {
-    const mk = kind === 'bold' ? '**' : '*'; const body = sel || (kind === 'bold' ? 'bold text' : 'italic text');
+  if (MARK[kind]) {
+    const mk = MARK[kind]; const body = sel || PLACEHOLDER[kind];
     const v = value.slice(0, start) + mk + body + mk + value.slice(end);
     return { value: v, start: start + mk.length, end: start + mk.length + body.length };
   }
@@ -47,6 +52,10 @@ export function applyFormat(value, start, end, kind, url) {
     const lineStart = value.lastIndexOf('\n', start - 1) + 1; let lineEnd = value.indexOf('\n', end); if (lineEnd < 0) lineEnd = value.length;
     const block = value.slice(lineStart, lineEnd).split('\n').map((l) => (/^\s*[-•]\s+/.test(l) ? l : '- ' + l)).join('\n');
     return { value: value.slice(0, lineStart) + block + value.slice(lineEnd), start: lineStart, end: lineStart + block.length };
+  }
+  if (kind === 'clear') {
+    const body = stripRich(sel);
+    return { value: value.slice(0, start) + body + value.slice(end), start, end: start + body.length };
   }
   return { value, start, end };
 }

@@ -6,6 +6,8 @@ const nodes = (list, k = '') => list.map((n, i) => {
   if (n.t === 'text') return <React.Fragment key={key}>{n.v}</React.Fragment>;
   if (n.t === 'b') return <strong key={key}>{nodes(n.c, key + '.')}</strong>;
   if (n.t === 'i') return <em key={key}>{nodes(n.c, key + '.')}</em>;
+  if (n.t === 'u') return <u key={key}>{nodes(n.c, key + '.')}</u>;
+  if (n.t === 's') return <s key={key}>{nodes(n.c, key + '.')}</s>;
   return <a key={key} href={n.href} target="_blank" rel="noopener noreferrer">{nodes(n.c, key + '.')}</a>;
 });
 // Shows text that creators formatted with **bold**, *italic*, [links](https://…) and "- " bullets. Never injects HTML.

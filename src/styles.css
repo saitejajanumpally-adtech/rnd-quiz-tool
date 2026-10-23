@@ -223,20 +223,16 @@ button.opt:hover{border-color:rgba(45,169,162,.6)}
 .subtabs{display:flex;gap:8px;margin-bottom:14px}
 
 /* ---- rich-text field: toolbar merged onto the field instead of floating above it ---- */
-.rtfield{border:1px solid var(--border2);border-radius:10px;overflow:hidden;background:var(--bg1)}
-.rtfield .fmt{margin:0;padding:6px 8px;border-bottom:1px solid var(--border);background:var(--bg)}
-.rtfield .fmt button{border:0;background:transparent;width:28px;height:28px}
-.rtfield .textarea,.rtfield .input{border:0;border-radius:0;background:transparent}
-.rtfield .rich-prev{border-radius:0;border-width:1px 0 0;margin-top:0}
+/* ---- floating format toolbar: appears only while text is selected, instead of a toolbar on every field ---- */
+.float-fmt{position:fixed;z-index:60;display:flex;gap:2px;background:var(--elev);border:1px solid var(--border2);border-radius:10px;padding:4px;box-shadow:0 10px 28px rgba(0,0,0,.45)}
+.float-fmt button{width:28px;height:28px;border-radius:7px;border:0;background:transparent;color:var(--fg2);font-weight:600;display:flex;align-items:center;justify-content:center;font-size:13px}
+.float-fmt button:hover{background:var(--bg3);color:var(--fg)}
 
 /* ---- correct-answer picker on MCQ/multi-select options ---- */
 .correct-pick{accent-color:var(--primary);width:19px;height:19px;flex:none;cursor:pointer}
 .opt-row{display:flex;align-items:center;gap:10px;border:1px solid var(--border2);border-radius:10px;padding:7px 10px;margin-bottom:8px;background:var(--bg1)}
 .opt-row.correct{border-color:var(--primary);background:rgba(45,169,162,.10)}
-.opt-row .input{flex:1 1 auto;min-width:0;background:transparent;border:0;padding:6px 4px}
-.opt-row .input:focus{box-shadow:none}
-.opt-row .fmt{margin:0}
-.opt-row .fmt button{width:26px;height:26px;border-color:var(--border2)}
+.opt-row .input{flex:1 1 auto;min-width:0}
 .opt-group{border:1px solid var(--border2);border-radius:12px;padding:14px;margin:0 0 14px}
 .opt-group > legend{padding:0 6px}
 

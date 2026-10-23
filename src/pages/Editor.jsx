@@ -20,46 +20,71 @@ const List = ({ items, onChange, placeholder, minItems = 2 }) => (
   <div>{items.map((o, i) => <div className="row center" key={i} style={{ marginBottom: 8 }}><input className="input" style={{ flex: '1 1 160px', minWidth: 0 }} aria-label={`${placeholder} ${i + 1}`} placeholder={`${placeholder} ${i + 1}`} value={o} onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))} /><button className="btn sm" aria-label="Remove" disabled={items.length <= minItems} onClick={() => onChange(items.filter((_, j) => j !== i))}>Remove</button></div>)}<button className="btn sm" onClick={() => onChange([...items, ''])}>Add another</button></div>
 );
 
-// A text box with a small formatting bar: bold, italic, bullets and links. Stored as simple markers, shown formatted to participants.
-function FormatField({ label, value, onChange, minHeight = 90 }) {
-  const { ask, toast } = useApp(); const ref = useRef(null);
+// Shared by every rich-text field (multi-line Question/Explanation boxes and single-line option inputs):
+// keyboard shortcuts, and a small toolbar that appears only while text is selected, instead of a
+// toolbar sitting on every field all the time. Works the same for a <textarea> or a one-line <input>.
+function useRichField(value, onChange) {
+  const { ask, toast } = useApp(); const ref = useRef(null); const [tip, setTip] = useState(null);
   const wrap = async (kind) => {
     const el = ref.current; if (!el) return; const start = el.selectionStart; const end = el.selectionEnd; let url;
     if (kind === 'link') {
       const u = await ask({ title: 'Add a link', input: { label: 'Web address, starting with https://', placeholder: 'https://', required: true }, ok: 'Add link' }); if (!u) return;
       url = safeUrl(u); if (!url) { toast('Enter an address that starts with https:// or http://', 'err'); return; }
     }
-    const r = applyFormat(value || '', start, end, kind, url); onChange(r.value);
+    const r = applyFormat(value || '', start, end, kind, url); onChange(r.value); setTip(null);
     requestAnimationFrame(() => { if (ref.current) { ref.current.focus(); ref.current.setSelectionRange(r.start, r.end); } });
   };
-  const marked = /\*[^\s*]|\]\(https?:|^\s*[-•]\s/m.test(value || '');
-  const Btn = ({ k, label, children }) => <button type="button" aria-label={label} title={label} onClick={() => wrap(k)}>{children}</button>;
+  const onSelect = () => {
+    const el = ref.current; if (!el || el.selectionStart === el.selectionEnd) { setTip(null); return; }
+    const r = el.getBoundingClientRect(); setTip({ left: r.left, top: r.top, bottom: r.bottom });
+  };
+  const onKeyDown = (e) => {
+    if (!(e.ctrlKey || e.metaKey)) return; const k = e.key.toLowerCase();
+    if (k === 'b') { e.preventDefault(); wrap('bold'); }
+    else if (k === 'i') { e.preventDefault(); wrap('italic'); }
+    else if (k === 'u') { e.preventDefault(); wrap('underline'); }
+    else if (k === 'k') { e.preventDefault(); wrap('link'); }
+  };
+  return { ref, tip, wrap, bind: { onSelect, onKeyDown, onBlur: () => setTip(null) } };
+}
+// The small bubble of format buttons shown above (or below, near the top of the screen) the current selection.
+function FloatingBar({ tip, onPick, bullet }) {
+  if (!tip) return null;
+  const above = tip.top > 60; const style = above ? { left: Math.max(8, tip.left), top: tip.top - 44 } : { left: Math.max(8, tip.left), top: tip.bottom + 8 };
+  const Btn = ({ k, label, children }) => <button type="button" aria-label={label} title={label} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(k)}>{children}</button>;
   return (
-    <div className="field mb"><label>{label}</label>
-      <div className="rtfield">
-        <div className="fmt" role="toolbar" aria-label={`Formatting for ${label}`}><Btn k="bold" label="Bold"><b>B</b></Btn><Btn k="italic" label="Italic"><i>I</i></Btn><Btn k="bullet" label="Bulleted list">•≡</Btn><Btn k="link" label="Insert link"><Icon name="link" size={14} /></Btn></div>
-        <textarea ref={ref} className="textarea" aria-label={label} style={{ minHeight }} value={value || ''} onChange={(e) => onChange(e.target.value)} />
-        {marked && <div className="rich-prev" aria-label="Preview"><div className="lab" style={{ marginBottom: 4 }}>Preview</div><Rich text={value} /></div>}
-      </div>
+    <div className="float-fmt" style={style} role="toolbar" aria-label="Text formatting">
+      <Btn k="bold" label="Bold (Ctrl+B)"><b>B</b></Btn>
+      <Btn k="italic" label="Italic (Ctrl+I)"><i>I</i></Btn>
+      <Btn k="underline" label="Underline (Ctrl+U)"><u>U</u></Btn>
+      <Btn k="strike" label="Strikethrough"><s>S</s></Btn>
+      {bullet && <Btn k="bullet" label="Bulleted list">•≡</Btn>}
+      <Btn k="link" label="Insert link (Ctrl+K)"><Icon name="link" size={13} /></Btn>
+      <Btn k="clear" label="Clear formatting">Tx</Btn>
     </div>
   );
 }
-
-// A one-line text input with the same Bold/Italic toolbar, used for MCQ/multi-select options.
-function OptionField({ value, onChange, placeholder, ariaLabel }) {
-  const ref = useRef(null);
-  const wrap = (kind) => {
-    const el = ref.current; if (!el) return; const start = el.selectionStart; const end = el.selectionEnd;
-    const r = applyFormat(value || '', start, end, kind); onChange(r.value);
-    requestAnimationFrame(() => { if (ref.current) { ref.current.focus(); ref.current.setSelectionRange(r.start, r.end); } });
-  };
+// A text box for Question/Explanation-style content. Highlight text to format it — no toolbar sits on
+// the field itself, so a question with several of these stays short instead of growing a toolbar each.
+function FormatField({ label, value, onChange, minHeight = 90 }) {
+  const { ref, tip, wrap, bind } = useRichField(value, onChange);
+  const marked = /\*[^\s*]|\+\+[^\s+]|~~[^\s~]|\]\(https?:|^\s*[-•]\s/m.test(value || '');
   return (
-    <span className="row center" style={{ flex: '1 1 260px', minWidth: 0, flexWrap: 'nowrap', gap: 4 }}>
-      <span className="fmt" role="toolbar" aria-label={`Formatting for ${ariaLabel}`}>
-        <button type="button" aria-label="Bold" title="Bold" onClick={() => wrap('bold')}><b>B</b></button>
-        <button type="button" aria-label="Italic" title="Italic" onClick={() => wrap('italic')}><i>I</i></button>
-      </span>
-      <input ref={ref} className="input" aria-label={ariaLabel} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+    <div className="field mb"><label>{label}</label>
+      <textarea ref={ref} className="textarea" aria-label={label} style={{ minHeight }} value={value || ''} onChange={(e) => onChange(e.target.value)} {...bind} />
+      <div className="muted small" style={{ marginTop: 4 }}>Highlight text to format it, or use Ctrl+B / Ctrl+I / Ctrl+U / Ctrl+K.</div>
+      <FloatingBar tip={tip} onPick={wrap} bullet />
+      {marked && <div className="rich-prev" aria-label="Preview"><div className="lab" style={{ marginBottom: 4 }}>Preview</div><Rich text={value} /></div>}
+    </div>
+  );
+}
+// A one-line input for MCQ/multi-select options. Same highlight-to-format behavior as FormatField, just no bullets.
+function OptionField({ value, onChange, placeholder, ariaLabel }) {
+  const { ref, tip, wrap, bind } = useRichField(value, onChange);
+  return (
+    <span style={{ flex: '1 1 260px', minWidth: 0 }}>
+      <input ref={ref} className="input" aria-label={ariaLabel} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} {...bind} />
+      <FloatingBar tip={tip} onPick={wrap} />
     </span>
   );
 }
@@ -92,7 +117,7 @@ function QuestionEditor({ q, onChange, onRemove, onMove, onDuplicate, n, locked,
     return (
       <fieldset className="opt-group" role={multi ? 'group' : 'radiogroup'} aria-label="Correct answer">
         <legend className="lab">Correct answer</legend>
-        <div className="muted small mb">{multi ? 'Tick every correct option.' : 'Select the correct option.'} You can use **bold** and *italic*, or the B/I buttons below.</div>
+        <div className="muted small mb">{multi ? 'Tick every correct option.' : 'Select the correct option.'} Highlight text in an option to format it.</div>
         {q.options.map((o, i) => (
           <div className={'opt-row' + (isCorrect(i) ? ' correct' : '')} key={i}>
             <input className="correct-pick" type={multi ? 'checkbox' : 'radio'} aria-label={`Mark option ${i + 1} as correct`} name={'c' + q.id} checked={isCorrect(i)}
@@ -155,11 +180,15 @@ function QuestionEditor({ q, onChange, onRemove, onMove, onDuplicate, n, locked,
 export default function Editor({ id }) {
   const { user, role, index, now, toast, ask, reload, settings } = useApp(); const isNew = id === 'new'; const [leaving, setLeaving] = useState(false);
   const [a, setA] = useState(null); const [step, setStep] = useState(1); const [errs, setErrs] = useState([]); const [busy, setBusy] = useState(false); const [h, setH] = useState(0); const [dirty, setDirty] = useState(false);
+  const [visited, setVisited] = useState(() => new Set([1]));
   const { loading, error } = useAsync(async () => {
     if (isNew) { const s = suggestSchedule(index, now); const q = newQuiz(s, user.email, settings.newQuizDefaults, user.name); const n = Object.values(index).filter((i) => new Date(i.opens).getUTCMonth() === new Date(s.opens).getUTCMonth()).length + 1; setA({ ...q, headline: HEADS(n, '')[0] }); return null; }
     const x = await ops.loadAuthoring(id); setA(x); return x;
   }, [id]);
   useEffect(() => { const f = (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } }; window.addEventListener('beforeunload', f); return () => window.removeEventListener('beforeunload', f); }, [dirty]);
+  // A step only earns its checkmark once the author has actually been there — Schedule has valid
+  // defaults from the moment a quiz is created, so "has valid data" alone would tick it prematurely.
+  useEffect(() => { setVisited((v) => (v.has(step) ? v : new Set(v).add(step))); }, [step]);
   if (error) return <div className="mt"><ErrorBox error={error} /></div>; if (loading || !a) return <Spinner />;
   const item = index[a.id]; const st = item ? quizStatus(item, now) : 'draft'; const can = isNew || ops.canEditQuiz(role);
   const questionsLocked = !!item && item.published && now >= item.opens;
@@ -198,7 +227,7 @@ export default function Editor({ id }) {
     <div className="pan mt" style={{ maxWidth: 940, margin: '28px auto 0' }}>
       <div className="row between center mb" style={{ alignItems: 'flex-end' }}><div><a href="#/manage" onClick={(e) => { e.preventDefault(); leave(); }}>← Back to Manage quizzes</a><div className="h2" style={{ marginTop: 8 }}>{isNew ? 'Create quiz' : 'Edit quiz'}</div></div><div className="row center" style={{ gap: 14 }}><span className="muted small">{dirty ? 'Unsaved changes' : 'No changes yet'}</span><button className="btn sm" onClick={leave}>Cancel</button></div></div>
       {questionsLocked && <div className="banner warn"><span>This quiz has opened, so questions are locked. You can still change the close time and messages.</span></div>}
-      <div className="steps" style={{ marginTop: 16 }}>{steps.map((l, i) => <button key={l} type="button" className={'btn sm step-tab' + (step === i + 1 ? ' s on' : '')} aria-current={step === i + 1 ? 'step' : undefined} onClick={() => goToStep(i + 1)}>{stepDone[i] && <span className="chk" aria-hidden="true">✓</span>}{l}</button>)}</div>
+      <div className="steps" style={{ marginTop: 16 }}>{steps.map((l, i) => <button key={l} type="button" className={'btn sm step-tab' + (step === i + 1 ? ' s on' : '')} aria-current={step === i + 1 ? 'step' : undefined} onClick={() => goToStep(i + 1)}>{stepDone[i] && visited.has(i + 1) && <span className="chk" aria-hidden="true">✓</span>}{l}</button>)}</div>
       <div className="card" style={{ padding: 26 }}>
         {step === 1 && <div className="col" style={{ gap: 16 }}><div className="h3">Basics</div>
           <div className="row"><div className="field grow" style={{ flex: '1 1 300px' }}><label htmlFor="t">Quiz name</label><input id="t" className="input" value={a.title} placeholder="R&D Quiz · November 2026 · 1" onChange={(e) => upd({ title: e.target.value })} /></div><div className="field grow" style={{ flex: '1 1 220px' }}><label htmlFor="tp">Topic (optional)</label><input id="tp" className="input" value={a.topic} placeholder="Header bidding" onChange={(e) => upd({ topic: e.target.value })} /></div></div>

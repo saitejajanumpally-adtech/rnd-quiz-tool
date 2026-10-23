@@ -34,6 +34,18 @@ describe('rich text', () => {
     expect(applyFormat('a\nb', 0, 3, 'bullet').value).toBe('- a\n- b');
     expect(applyFormat('see here', 4, 8, 'link', 'https://x.com').value).toBe('see [here](https://x.com)');
   });
+  it('supports underline and strikethrough, parsed and wrapped the same way as bold/italic', () => {
+    expect(applyFormat('hello world', 6, 11, 'underline').value).toBe('hello ++world++');
+    expect(applyFormat('hello world', 6, 11, 'strike').value).toBe('hello ~~world~~');
+    const kinds = parseRich('This is ++underlined++ and ~~struck~~.')[0].c.map((n) => n.t);
+    expect(kinds).toContain('u'); expect(kinds).toContain('s');
+    expect(stripRich('++underlined++ and ~~struck~~')).toBe('underlined and struck');
+  });
+  it('clear formatting strips markers from just the selected text', () => {
+    const value = '**bold** plain *italic*';
+    const r = applyFormat(value, 0, 8, 'clear'); // selects "**bold**"
+    expect(r.value).toBe('bold plain *italic*');
+  });
 });
 
 describe('quiz model: required questions, optional sections, owner names', () => {
