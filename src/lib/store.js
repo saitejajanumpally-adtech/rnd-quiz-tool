@@ -1,4 +1,5 @@
 import { DEMO, CONFIG } from '../config.js';
+export { DELETE_FIELD } from './sentinels.js';
 
 let backend = null;
 const ready = (async () => {

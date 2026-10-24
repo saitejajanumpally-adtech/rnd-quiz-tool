@@ -57,6 +57,20 @@ describe('arena', () => {
     render(<App />); await persona('Priya'); await screen.findByText(/Welcome back, Priya/);
     expect(document.querySelector('img.mimg')).toBeNull();
   });
+  it('asks for confirmation before starting a quiz with a personal time limit, and only navigates once confirmed', async () => {
+    await ops.patchIndex('z_oct2', { timeLimitMin: 30 });
+    render(<App />); await persona('Priya');
+    expect(await screen.findByText(/Heads up: once you start, you'll have 30 minutes/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Start quiz' }));
+    const dlg = await screen.findByRole('dialog', { name: /Start the quiz now/ });
+    expect(within(dlg).getByText(/30 minutes to finish/)).toBeTruthy();
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(location.hash).toBe('#/'); // cancelling must not navigate into the quiz
+    fireEvent.click(screen.getByRole('button', { name: 'Start quiz' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Start now' }));
+    await waitFor(() => expect(location.hash).toBe('#/quiz/z_oct2'));
+  });
 });
 
 describe('required questions and the finish flow', () => {

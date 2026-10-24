@@ -92,6 +92,12 @@ describe('quiz model', () => {
     expect(questionErrors(q)).toContain('remove the duplicate option text.');
     expect(questionErrors({ ...q, options: ['A', 'B', 'C'] })).not.toContain('remove the duplicate option text.');
   });
+  it('a new quiz has no personal time limit by default, and it round-trips through toDocs/fromDocs', () => {
+    const a = sampleAuthoring(); expect(a.timeLimitMin).toBe(0);
+    a.timeLimitMin = 30; const { quiz, key } = toDocs(a); expect(quiz.timeLimitMin).toBe(30);
+    const back = fromDocs(a.id, quiz, key); expect(back.timeLimitMin).toBe(30);
+    const none = fromDocs(a.id, { ...quiz, timeLimitMin: 0 }, key); expect(none.timeLimitMin).toBe(0);
+  });
   it('removing the correct option clears the answer instead of silently falling back to another option', () => {
     // mirrors Editor.jsx's optsWithCorrect removeOption logic
     const removeOption = (q, i) => { const shift = (x) => (x > i ? x - 1 : x); return q.correct == null || q.correct === i ? null : shift(q.correct); };

@@ -1,12 +1,16 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import {
-  initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, waitForPendingWrites,
+  initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, waitForPendingWrites, deleteField,
   doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, limit as qlimit, getDocs, writeBatch, getCountFromServer
 } from 'firebase/firestore';
 import { CONFIG } from '../config.js';
+import { DELETE_FIELD } from './sentinels.js';
 
 const clean = (o) => JSON.parse(JSON.stringify(o));
+// clean() round-trips through JSON, which can't carry a real Firestore deleteField() sentinel (it isn't
+// plain data) — so DELETE_FIELD is passed through clean() as an ordinary string, then swapped in here.
+const resolve = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v === DELETE_FIELD ? deleteField() : v]));
 
 // Queues writes locally (IndexedDB) so a dropped connection doesn't lose them: they sync automatically once back online.
 // Falls back to the plain, memory-only client if persistence can't be enabled (e.g. some private-browsing modes).
@@ -47,8 +51,8 @@ export function createFirebase(cfg) {
       signOut: () => signOut(fbAuth)
     },
     async get(path) { const s = await getDoc(ref(path)); return s.exists() ? s.data() : null; },
-    async set(path, data, merge = false) { await setDoc(ref(path), clean(data), { merge }); },
-    async update(path, data) { await updateDoc(ref(path), clean(data)); },
+    async set(path, data, merge = false) { await setDoc(ref(path), resolve(clean(data)), { merge }); },
+    async update(path, data) { await updateDoc(ref(path), resolve(clean(data))); },
     async del(path) { await deleteDoc(ref(path)); },
     async list(coll, opts) { const s = await getDocs(q(coll, opts)); return s.docs.map((d) => ({ id: d.id, ...d.data() })); },
     async count(coll, opts) { const s = await getCountFromServer(q(coll, opts)); return s.data().count; },
@@ -59,8 +63,8 @@ export function createFirebase(cfg) {
         const b = writeBatch(fs);
         ops.slice(i, i + 400).forEach((o) => {
           if (o.type === 'del') b.delete(ref(o.path));
-          else if (o.type === 'update') b.update(ref(o.path), clean(o.data));
-          else b.set(ref(o.path), clean(o.data), { merge: !!o.merge });
+          else if (o.type === 'update') b.update(ref(o.path), resolve(clean(o.data)));
+          else b.set(ref(o.path), resolve(clean(o.data)), { merge: !!o.merge });
         });
         await b.commit();
       }

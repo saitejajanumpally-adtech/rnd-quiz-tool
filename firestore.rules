@@ -128,7 +128,7 @@ service cloud.firestore {
             && resource.data.submitted == false
             && request.resource.data.uid == resource.data.uid
             && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['answers', 'updatedAt', 'submitted', 'submittedAt'])
+                 .hasOnly(['answers', 'updatedAt', 'submitted', 'submittedAt', 'auto'])
             && quizOpen(resource.data.quizId)
             && profileActive())
         || isStaff();

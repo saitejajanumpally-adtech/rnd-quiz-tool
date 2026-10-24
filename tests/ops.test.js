@@ -23,6 +23,32 @@ describe('end to end quiz lifecycle on the demo backend', () => {
     expect(plan.ok.length).toBe(1); expect(plan.errors.length).toBe(3);
     expect(ops.planBulkRoles([{ email: 'a@databeat.io', role: 'admin' }], 'creator').errors[0]).toMatch(/creators can only/);
   });
+  it('startResponse records when a timed quiz was opened, before any answer exists, without clobbering later answers', async () => {
+    const now = Date.now();
+    const a = newQuiz({ opens: now - 1000, closes: now + 5000 }, creator.email); a.timeLimitMin = 30;
+    a.title = 'Timed quiz'; a.sections = [{ id: 's1', title: 'All', timerMin: 0, questions: [{ ...newQuestion('mcq', 'm1'), text: 'M?', options: ['a', 'b'], correct: 1 }] }];
+    await ops.saveQuiz(a, creator, { publish: true });
+    const openedAt = now - 60000; // opened a minute ago, already past a hypothetical 30s limit for this test
+    await ops.startResponse(p1, a.id, openedAt);
+    const opened = await ops.loadMyResponse(a.id, 'p1');
+    expect(opened.startedAt).toBe(openedAt); expect(opened.answers).toEqual({}); expect(opened.submitted).toBe(false);
+    // answering afterwards must not reset startedAt or wipe the empty-answers doc
+    await ops.saveAnswer(p1, a.id, 'm1', 1, true);
+    const answered = await ops.loadMyResponse(a.id, 'p1');
+    expect(answered.startedAt).toBe(openedAt); expect(answered.answers.m1).toBe(1);
+  });
+  it('deselecting an answer actually removes it from storage, not just the local view', async () => {
+    const now = Date.now();
+    const a = newQuiz({ opens: now - 1000, closes: now + 5000 }, creator.email);
+    a.title = 'Deselect test';
+    a.sections = [{ id: 's1', title: 'All', timerMin: 0, questions: [{ ...newQuestion('mcq', 'm1'), text: 'M?', options: ['a', 'b'], correct: 1 }] }];
+    await ops.saveQuiz(a, creator, { publish: true });
+    await ops.saveAnswer(p1, a.id, 'm1', 1, false);
+    expect((await ops.loadMyResponse(a.id, 'p1')).answers.m1).toBe(1);
+    await ops.saveAnswer(p1, a.id, 'm1', undefined, true); // same as clicking the selected option again
+    const resp = await ops.loadMyResponse(a.id, 'p1');
+    expect('m1' in resp.answers).toBe(false); // really gone, not just set to undefined
+  });
   it('create, take, auto-submit, score, review, release', async () => {
     const now = Date.now();
     const a = newQuiz({ opens: now - 1000, closes: now + 5000, keyAt: now + 9000 }, creator.email);

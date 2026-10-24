@@ -1,5 +1,5 @@
 // Everything the app does with the database lives here, so screens stay simple and this can be tested.
-import { store, rid } from './store.js';
+import { store, rid, DELETE_FIELD } from './store.js';
 import { CONFIG } from '../config.js';
 import { toDocs, fromDocs, indexItem, allQuestions, hasWritten, fillTemplate } from './quizModel.js';
 import { gradeQuiz, hasAnyAnswer, applyMovement, topRows } from './scoring.js';
@@ -95,14 +95,30 @@ export async function loadChangeLog(max = 100) { const rows = await store.list('
 // ---------------- taking a quiz
 export async function loadQuiz(id) { return store.get('quizzes/' + id); }
 export async function loadMyResponse(id, uid) { return store.get('responses/' + rid(id, uid)); }
+// For quizzes with a personal time limit: creates an empty response the instant someone opens the quiz,
+// so the clock starts from first open rather than from their first saved answer.
+export async function startResponse(user, quizId, now) {
+  const path = 'responses/' + rid(quizId, user.uid);
+  await store.set(path, { quizId, uid: user.uid, email: user.email, name: user.name, answers: {}, submitted: false, startedAt: now, updatedAt: now });
+}
 export async function saveAnswer(user, quizId, qid, value, exists) {
   const path = 'responses/' + rid(quizId, user.uid); const now = Date.now();
   if (!exists) { await store.set(path, { quizId, uid: user.uid, email: user.email, name: user.name, answers: { [qid]: value }, submitted: false, startedAt: now, updatedAt: now }); return; }
-  await store.update(path, { [`answers.${qid}`]: value, updatedAt: now });
+  // A deselected answer (value === undefined) needs the delete sentinel: a plain undefined on a dotted
+  // field path just gets dropped from the write, silently leaving the previous answer in place.
+  await store.update(path, { [`answers.${qid}`]: value === undefined ? DELETE_FIELD : value, updatedAt: now });
 }
-export async function submitResponse(user, quizId) {
+export async function submitResponse(user, quizId, auto = false) {
   const now = Date.now();
-  await store.update('responses/' + rid(quizId, user.uid), { submitted: true, submittedAt: now, updatedAt: now });
+  const path = 'responses/' + rid(quizId, user.uid);
+  try { await store.update(path, { submitted: true, submittedAt: now, updatedAt: now, ...(auto ? { auto: true } : {}) }); }
+  catch (e) {
+    // The `auto` field needs a matching allowance in firestore.rules before a participant's own client
+    // can set it (see SETUP-GUIDE.md). Until that's deployed, submit without the tag rather than fail
+    // the whole submission — this makes the two deployments order-independent.
+    if (auto && /permission-denied/i.test((e && e.code) || '')) { await store.update(path, { submitted: true, submittedAt: now, updatedAt: now }); return; }
+    throw e;
+  }
 }
 export async function liveCounts(quizId) {
   const [submitted, started] = await Promise.all([store.count('responses', { where: [['quizId', '==', quizId], ['submitted', '==', true]] }), store.count('responses', { where: [['quizId', '==', quizId]] })]);

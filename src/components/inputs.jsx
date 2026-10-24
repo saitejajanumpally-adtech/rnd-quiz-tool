@@ -10,9 +10,9 @@ export function QuestionInput({ q, value, onChange, disabled }) {
   switch (q.type) {
     case 'mcq': case 'picture':
       return <div>{q.type === 'picture' && q.image && <img src={q.image} alt="Question picture" style={{ maxWidth: '100%', maxHeight: 320, borderRadius: 12, marginBottom: 14, border: '1px solid var(--border2)' }} />}
-        {q.options.map((o, i) => <button key={i} className={'opt' + (value === i ? ' sel' : '')} aria-pressed={value === i} disabled={disabled} onClick={() => set(i)}><b>{KEYS[i]}</b><span className="t"><Rich text={o} inline /></span></button>)}</div>;
+        {q.options.map((o, i) => <button key={i} className={'opt' + (value === i ? ' sel' : '')} aria-pressed={value === i} disabled={disabled} onClick={() => set(value === i ? undefined : i)}><b>{KEYS[i]}</b><span className="t"><Rich text={o} inline /></span></button>)}</div>;
     case 'tf':
-      return <div className="row">{[[true, 'True'], [false, 'False']].map(([v, l]) => <button key={l} className={'opt' + (value === v ? ' sel' : '')} style={{ flex: '1 1 160px', justifyContent: 'center' }} aria-pressed={value === v} disabled={disabled} onClick={() => set(v)}>{l}</button>)}</div>;
+      return <div className="row">{[[true, 'True'], [false, 'False']].map(([v, l]) => <button key={l} className={'opt' + (value === v ? ' sel' : '')} style={{ flex: '1 1 160px', justifyContent: 'center' }} aria-pressed={value === v} disabled={disabled} onClick={() => set(value === v ? undefined : v)}>{l}</button>)}</div>;
     case 'multi': {
       const sel = Array.isArray(value) ? value : [];
       return <div><div className="small muted" style={{ marginBottom: 8 }}>Select all that apply.</div>{q.options.map((o, i) => { const on = sel.includes(i); return <button key={i} className={'opt' + (on ? ' sel' : '')} aria-pressed={on} disabled={disabled} onClick={() => set(on ? sel.filter((x) => x !== i) : [...sel, i].sort((a, b) => a - b))}><b>{on ? '✓' : KEYS[i]}</b><span className="t"><Rich text={o} inline /></span></button>; })}</div>;
@@ -29,7 +29,7 @@ export function QuestionInput({ q, value, onChange, disabled }) {
     }
     case 'rating': {
       const lo = q.scale.min, hi = q.scale.max; const nums = []; for (let n = lo; n <= hi; n++) nums.push(n);
-      return <div><div className="rate">{nums.map((n) => <button key={n} className={value === n ? 'sel' : ''} aria-pressed={value === n} disabled={disabled} onClick={() => set(n)}>{n}</button>)}</div><div className="row between small muted" style={{ marginTop: 6 }}><span>{q.scale.minLabel}</span><span>{q.scale.maxLabel}</span></div></div>;
+      return <div><div className="rate">{nums.map((n) => <button key={n} className={value === n ? 'sel' : ''} aria-pressed={value === n} disabled={disabled} onClick={() => set(value === n ? undefined : n)}>{n}</button>)}</div><div className="row between small muted" style={{ marginTop: 6 }}><span>{q.scale.minLabel}</span><span>{q.scale.maxLabel}</span></div></div>;
     }
     case 'text':
       return <div><textarea className="textarea" disabled={disabled} aria-label="Your answer" placeholder="Type your answer here" value={value || ''} onChange={(e) => set(e.target.value)} /><div className="small muted" style={{ marginTop: 6 }}>{wordCount(value)} words · a few clear sentences is enough</div></div>;

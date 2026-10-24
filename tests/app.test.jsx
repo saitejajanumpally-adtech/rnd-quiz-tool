@@ -19,6 +19,12 @@ describe('participant journey', () => {
     fireEvent.click(opt);
     await waitFor(() => expect(screen.getByText(/All answers saved/)).toBeTruthy(), { timeout: 3000 });
     expect((await store.get('responses/z_oct2_u_participant')).answers.e1).toBe(2);
+    expect(opt.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(opt); // clicking the already-selected option again should deselect it
+    expect(opt.getAttribute('aria-pressed')).toBe('false');
+    await waitFor(async () => expect('e1' in (await store.get('responses/z_oct2_u_participant')).answers).toBe(false), { timeout: 3000 });
+    fireEvent.click(opt); // reselect so the rest of the journey (required-question checks etc.) is unaffected
+    await waitFor(async () => expect((await store.get('responses/z_oct2_u_participant')).answers.e1).toBe(2), { timeout: 3000 });
     fireEvent.click(screen.getByRole('button', { name: /Next section: Opinion/ }));
     const ta = (await screen.findAllByLabelText('Your answer'))[0];
     fireEvent.change(ta, { target: { value: 'I would keep a human in the loop.' } });

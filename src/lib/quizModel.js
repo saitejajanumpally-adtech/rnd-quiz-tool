@@ -32,7 +32,7 @@ export function newQuestion(type, id = uid()) {
 }
 export function newQuiz(sched, owner, defaults = {}, ownerName = '') {
   return {
-    id: uid('z'), title: '', topic: '', headline: '', ...sched, autoSubmit: !!defaults.autoSubmit, allowReviewRequests: !!defaults.allowReviewRequests, showInLibrary: true,
+    id: uid('z'), title: '', topic: '', headline: '', ...sched, timeLimitMin: 0, autoSubmit: !!defaults.autoSubmit, allowReviewRequests: !!defaults.allowReviewRequests, showInLibrary: true,
     announceMsg: 'Hey @all, {quiz_name} is live. Take it here: {link}\nCloses: {close_time} · Answer key: {key_time}\nTeam Leads, please make sure everyone on your team submits.',
     releaseMsg: 'Hey @all, results for {quiz_name} are out. Your score and the answer key are ready: {link}',
     ownerEmail: owner, ownerName, editors: [],
@@ -65,6 +65,7 @@ export function toDocs(a) {
   }));
   const quiz = {
     title: a.title, topic: a.topic || '', headline: a.headline || '', opens: a.opens, closes: a.closes, keyAt: a.keyAt,
+    timeLimitMin: Number(a.timeLimitMin) || 0,
     autoSubmit: !!a.autoSubmit, allowReviewRequests: !!a.allowReviewRequests, showInLibrary: a.showInLibrary !== false,
     announceMsg: a.announceMsg || '', releaseMsg: a.releaseMsg || '', ownerEmail: a.ownerEmail, ownerName: a.ownerName || '', editors: a.editors || [], sections
   };
@@ -89,6 +90,7 @@ export function fromDocs(id, quiz, key) {
     })
   }));
   return { id, title: quiz.title, topic: quiz.topic, headline: quiz.headline, opens: quiz.opens, closes: quiz.closes, keyAt: quiz.keyAt,
+    timeLimitMin: quiz.timeLimitMin || 0,
     autoSubmit: !!quiz.autoSubmit, allowReviewRequests: !!quiz.allowReviewRequests, showInLibrary: quiz.showInLibrary !== false,
     announceMsg: quiz.announceMsg || '', releaseMsg: quiz.releaseMsg || '', ownerEmail: quiz.ownerEmail, ownerName: quiz.ownerName || '', editors: quiz.editors || [], sections };
 }
@@ -153,6 +155,7 @@ export function fillTemplate(t, vars) { return String(t || '').replace(/\{(\w+)\
 export function indexItem(id, quiz, flags = {}) {
   return {
     id, title: quiz.title, headline: quiz.headline || '', topic: quiz.topic || '', opens: quiz.opens, closes: quiz.closes, keyAt: quiz.keyAt || 0,
+    timeLimitMin: quiz.timeLimitMin || 0,
     showInLibrary: quiz.showInLibrary !== false, autoSubmit: !!quiz.autoSubmit, allowReviewRequests: !!quiz.allowReviewRequests,
     ownerEmail: quiz.ownerEmail, ownerName: quiz.ownerName || '', editors: quiz.editors || [], qCount: allQuestions(quiz).length, max: maxScore(quiz), hasWritten: hasWritten(quiz),
     published: false, released: false, ...flags

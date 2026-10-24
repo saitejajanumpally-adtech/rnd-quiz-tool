@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../ctx.jsx';
 import { store } from '../lib/store.js';
-import { loadQuiz, loadMyResponse, saveAnswer, submitResponse } from '../lib/ops.js';
+import { loadQuiz, loadMyResponse, saveAnswer, submitResponse, startResponse } from '../lib/ops.js';
 import { quizStatus, allQuestions } from '../lib/quizModel.js';
 import { isAnswered } from '../lib/scoring.js';
 import { summarize } from '../lib/stages.js';
@@ -77,7 +77,17 @@ export default function QuizPage({ id }) {
     (async () => {
       try {
         const [q, r] = await Promise.all([loadQuiz(id), loadMyResponse(id, user.uid)]);
-        if (!on) return; setQuiz(q); if (r) { exists.current = true; startedAt.current = r.startedAt || 0; setAnswers(r.answers || {}); setSubmitted(!!r.submitted); }
+        if (!on) return;
+        if (r) { exists.current = true; startedAt.current = r.startedAt || 0; setAnswers(r.answers || {}); setSubmitted(!!r.submitted); }
+        else if (q && q.timeLimitMin > 0) {
+          // A personal time limit starts counting from the moment the quiz is opened, even before any
+          // answer is saved — so the response needs to exist from first open, not from the first answer.
+          // If this fails (e.g. offline on load), fail quietly: the clock just starts a bit later, from
+          // their first saved answer instead, rather than blocking them from seeing the quiz at all.
+          try { const openedAt = Date.now(); await startResponse(user, id, openedAt); if (on) { exists.current = true; startedAt.current = openedAt; } }
+          catch (e) { /* saveAnswer's own !exists branch will create the response once they answer */ }
+        }
+        setQuiz(q);
         // Resume anything left over from a closed tab or crash before it finished saving.
         try {
           const raw = localStorage.getItem(localKey); const restored = raw ? JSON.parse(raw) : null; const keys = restored ? Object.keys(restored) : [];
@@ -122,9 +132,22 @@ export default function QuizPage({ id }) {
   const curSec = quiz ? quiz.sections[Math.min(si, quiz.sections.length - 1)] : null;
   const inReview = quiz ? si >= quiz.sections.length : false;
   useEffect(() => { if (curSec && curSec.timerMin && !inReview && secStart[si] === undefined) setSecStart((p) => ({ ...p, [si]: Date.now() })); }, [si, quiz]); // eslint-disable-line
-  useEffect(() => { if (!(curSec && curSec.timerMin)) return undefined; const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, [si, quiz]); // eslint-disable-line
+  // Whole-quiz personal time limit: counts from startedAt (set the moment the quiz was opened, above),
+  // independent of the section timer and of the quiz's own opens/closes window.
+  const myDeadline = quiz && quiz.timeLimitMin > 0 && startedAt.current ? startedAt.current + quiz.timeLimitMin * 60000 : null;
+  const myLeft = myDeadline ? Math.max(0, myDeadline - Date.now()) : null;
+  useEffect(() => { if (!((curSec && curSec.timerMin) || (myDeadline && !submitted))) return undefined; const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, [si, quiz, submitted]); // eslint-disable-line
   const left = curSec && curSec.timerMin && !inReview && secStart[si] !== undefined ? Math.max(0, secStart[si] + curSec.timerMin * 60000 - Date.now()) : null;
   useEffect(() => { if (left === 0 && quiz && si < quiz.sections.length) { toast('Section time is up. Moving on.'); setSi(si + 1); } }, [left]); // eslint-disable-line
+  const autoSubmitRef = useRef(false);
+  useEffect(() => {
+    if (myLeft !== 0 || submitted || autoSubmitRef.current) return;
+    autoSubmitRef.current = true;
+    (async () => {
+      try { Object.keys(pending.current).forEach(run); await chain.current; await submitResponse(user, id, true); setSubmitted(true); toast('Your time limit was reached. Your saved answers were submitted.'); }
+      catch (e) { autoSubmitRef.current = false; /* try again on the next tick */ }
+    })();
+  }, [myLeft, submitted]); // eslint-disable-line
 
   if (item && status === 'scheduled') return <div className="card mt"><div className="h3" style={{ marginBottom: 6 }}>This quiz hasn't opened yet</div><div className="fg2">It opens {fmtDateTime(item.opens)}. <a href="#/">Back to the Arena</a></div></div>;
   if (err) return <div className="mt"><ErrorBox error={err} /></div>;
@@ -164,7 +187,7 @@ export default function QuizPage({ id }) {
 
   return (
     <div className="mt" style={{ maxWidth: 900, margin: '28px auto 0' }}>
-      <div className="row between center mb"><a href="#/" className="fg2">← Leave quiz</a><div className="h3" style={{ fontSize: 16 }}>{item.title}</div><Saved state={save} /></div>
+      <div className="row between center mb"><a href="#/" className="fg2">← Leave quiz</a><div className="h3" style={{ fontSize: 16 }}>{item.title}</div><div className="row center" style={{ gap: 10 }}>{myLeft !== null && <span className="chip warn" role="timer" aria-label="Your personal time limit">{Math.floor(myLeft / 60000)}:{String(Math.floor((myLeft % 60000) / 1000)).padStart(2, '0')} left</span>}<Saved state={save} /></div></div>
       {(save === 'error' || save === 'offline' || save === 'blocked') && <div className="mb"><Bolt moment="error" card={false} size={72} /></div>}
       <div className="sections">
         {!flat && secs.map((s, i) => <button key={s.id} className={'sec' + (i === si ? ' on' : '') + (secDone(s) && i !== si ? ' done' : '')} onClick={() => setSi(i)}><span className="lab" style={{ color: i === si ? 'var(--accent)' : secDone(s) ? 'var(--success)' : 'var(--muted)' }}>Section {i + 1}{secDone(s) && i !== si ? ' · done' : ''}</span><b>{s.title}</b></button>)}

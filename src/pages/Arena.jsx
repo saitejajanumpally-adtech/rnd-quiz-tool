@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useApp } from '../ctx.jsx';
+import { useApp, go } from '../ctx.jsx';
 import { quizStatus } from '../lib/quizModel.js';
 import { summarize, stageFor } from '../lib/stages.js';
 import { loadMyResponse, liveCounts, isStaff, checklist } from '../lib/ops.js';
@@ -22,8 +22,15 @@ export function pickCurrent(index, now, settings) {
 }
 
 export default function Arena() {
-  const { user, role, index, stats, settings, now, prefs } = useApp(); const m = useMascot();
+  const { user, role, index, stats, settings, now, prefs, ask } = useApp(); const m = useMascot();
   const cur = pickCurrent(index, now, settings); const item = cur.item;
+  const startQuiz = async (quizItem) => {
+    if (quizItem.timeLimitMin > 0) {
+      const ok = await ask({ title: 'Start the quiz now?', body: `Once you start, you'll have ${quizItem.timeLimitMin} minutes to finish — the clock keeps running even if you close this tab or come back later. Make sure you're ready before continuing.`, ok: 'Start now' });
+      if (!ok) return;
+    }
+    go('/quiz/' + quizItem.id);
+  };
   const [resp, setResp] = useState(undefined); const [res, setRes] = useState(undefined); const [counts, setCounts] = useState(null);
   useEffect(() => {
     let on = true; setResp(undefined); setRes(undefined); setCounts(null);
@@ -72,7 +79,7 @@ export default function Arena() {
           {sub === 'loading' && <div className="muted">Loading…</div>}
           {sub === 'upcoming' && <><Eyebrow dot="var(--muted)">No quiz live right now</Eyebrow><h1 className="h1">Next round opens<br />{fmtDate(item.opens)}.</h1><p className="sub mb">Opens {fmtTime(item.opens)} IST, closes {fmtDateTime(item.closes)}. Rounds repeat every second Tuesday.</p><Countdown to={item.opens} now={now} />{cur.last && <LastLinks last={cur.last} />}{isStaff(role) && <div className="strip"><div className="lab" style={{ color: 'var(--warn)' }}>Admin · upcoming</div><p className="fg2" style={{ margin: '8px 0 12px' }}>{item.title} is scheduled and ready.</p><a className="btn sm" href={'#/manage/' + item.id}>Open in Manage quizzes</a></div>}</>}
           {sub === 'none' && <><Eyebrow dot="var(--muted)">No quiz live right now</Eyebrow><h1 className="h1">Next round is<br />on its way.</h1><p className="sub mb">The date isn't set yet. It will be announced in Google Chat and by email.</p>{cur.last && <LastLinks last={cur.last} />}{isStaff(role) && <div className="strip"><p className="fg2" style={{ marginBottom: 12 }}>No upcoming quiz is published.</p><a className="btn sm p" href="#/edit/new">Create the next quiz</a></div>}</>}
-          {sub === 'live' && <><Eyebrow dot="var(--success)" live>Open now · closes {fmtDateTime(item.closes)}</Eyebrow><h1 className="h1">{item.headline || 'A new round is live. Show what you know.'}</h1><p className="sub mb">{item.title}. {item.qCount} questions, about {Math.max(5, item.qCount * 2)} minutes.</p><Countdown to={item.closes} now={now} /><div className="row center"><a className="btn p cta" href={'#/quiz/' + item.id} style={{ fontSize: 16, padding: '15px 30px' }}>Start quiz</a><span className="muted small">Answers save as you go. Submitting locks them.</span></div></>}
+          {sub === 'live' && <><Eyebrow dot="var(--success)" live>Open now · closes {fmtDateTime(item.closes)}</Eyebrow><h1 className="h1">{item.headline || 'A new round is live. Show what you know.'}</h1><p className="sub mb">{item.title}. {item.qCount} questions, about {Math.max(5, item.qCount * 2)} minutes.</p>{item.timeLimitMin > 0 && <div className="banner warn" style={{ marginBottom: 4 }}><span>Heads up: once you start, you'll have {item.timeLimitMin} minutes to finish. The clock starts the moment you open it.</span></div>}<Countdown to={item.closes} now={now} /><div className="row center">{item.timeLimitMin > 0 ? <button type="button" className="btn p cta" style={{ fontSize: 16, padding: '15px 30px' }} onClick={() => startQuiz(item)}>Start quiz</button> : <a className="btn p cta" href={'#/quiz/' + item.id} style={{ fontSize: 16, padding: '15px 30px' }}>Start quiz</a>}<span className="muted small">Answers save as you go. Submitting locks them.</span></div></>}
           {sub === 'progress' && <><Eyebrow dot="var(--success)" live>In progress · closes {fmtDateTime(item.closes)}</Eyebrow><h1 className="h1">Pick up where<br />you left off.</h1><p className="sub mb">{answered} of {item.qCount} answered. Your answers are saved. Edit freely until you submit; submitting locks them.</p><div className="bar mb" style={{ maxWidth: 420 }}><i style={{ width: Math.round((answered / Math.max(1, item.qCount)) * 100) + '%' }} /></div><a className="btn p cta" href={'#/quiz/' + item.id} style={{ fontSize: 16, padding: '15px 30px' }}>Continue quiz</a></>}
           {sub === 'submitted' && <><Eyebrow dot="var(--success)">{item.title.replace('R&D Quiz · ', '')} · Submitted</Eyebrow><h1 className="h1" style={{ fontSize: 42 }}>You’re in. Nicely done.</h1><p className="sub" style={{ margin: '10px 0 0' }}>Your answers are locked. Results and the answer key will be available after the quiz closes on {fmtDate(item.closes)}.</p><Tracker /><div className="row center" style={{ gap: 22, marginTop: 22 }}><a className="btn p" href="#/library">Explore past quizzes →</a>{lastReleased && <a href={'#/leaderboard/' + lastReleased.id}>View previous leaderboard ↗</a>}</div></>}
           {(sub === 'closedSubmitted' || sub === 'closedAuto' || sub === 'closedMissed') && <><Eyebrow dot="var(--warn)">Quiz closed</Eyebrow><h1 className="h1">Scores are<br />on the way.</h1><p className="sub mb">{sub === 'closedAuto' ? 'The quiz closed and your saved answers were submitted for you.' : sub === 'closedMissed' ? 'You didn\'t take this round.' : 'You submitted this round.'} Results and the answer key will be released soon, and you\'ll get a message in Chat and by email.</p>{isStaff(role) && <div className="strip"><div className="lab" style={{ color: 'var(--warn)' }}>Admin · closed</div><p className="fg2" style={{ margin: '8px 0 12px' }}>{counts ? `${counts.submitted} submitted, ${counts.started} started. ` : ''}Release checklist: {checklist(item, now).steps.filter((s) => s.done).length} of {checklist(item, now).steps.length} steps done.</p><a className="btn sm s" href={'#/manage/' + item.id}>Open release checklist</a></div>}</>}
