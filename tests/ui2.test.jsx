@@ -93,7 +93,7 @@ describe('required questions and the finish flow', () => {
   });
   it('does not show the old "switching tabs" box', async () => {
     render(<App />); await persona('Priya'); await go('#/quiz/z_oct2');
-    await screen.findByText(/Section 1/); expect(screen.queryByText(/Switching tabs is safe/)).toBeNull();
+    await screen.findAllByText(/Section 1/); expect(screen.queryByText(/Switching tabs is safe/)).toBeNull();
   });
   it('the submit dialog appears, Cancel keeps answers open, and nothing is submitted until confirmed', async () => {
     render(<App />); await persona('Priya'); await go('#/quiz/z_oct2');

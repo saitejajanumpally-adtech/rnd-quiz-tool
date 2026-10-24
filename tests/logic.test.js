@@ -146,7 +146,7 @@ describe('scoring', () => {
     expect(scoreAuto(q('q_tf'), k('q_tf'), false)).toBe(2);
     expect(scoreAuto(q('q_multi'), k('q_multi'), [0, 2])).toBe(2);
     expect(scoreAuto(q('q_multi'), k('q_multi'), [0])).toBe(1);
-    expect(scoreAuto(q('q_multi'), k('q_multi'), [0, 1])).toBe(0);
+    expect(scoreAuto(q('q_multi'), k('q_multi'), [0, 1])).toBe(1); // no negative marking by default: the wrong pick just isn't credited, it doesn't cost anything
     expect(scoreAuto(q('q_order'), k('q_order'), k('q_order').correct)).toBe(2);
     expect(scoreAuto(q('q_order'), k('q_order'), [0, 1, 2, 3])).toBe(k('q_order').correct.every((v, i) => v === i) ? 2 : 0);
     const m = k('q_match').correct;
@@ -154,6 +154,15 @@ describe('scoring', () => {
     expect(scoreAuto(q('q_match'), k('q_match'), { '0': m['0'], '1': (m['1'] + 1) % 3, '2': (m['2'] + 1) % 3 })).toBe(0.5);
     expect(scoreAuto(q('q_picture'), k('q_picture'), 0)).toBe(2);
     expect(scoreAuto(q('q_mcq'), k('q_mcq'), undefined)).toBe(0);
+  });
+  it('only deducts points for a wrong answer when a creator turns negative marking on', () => {
+    const mcqKey = { ...k('q_mcq'), negativeMarking: true, penalty: 0.5 };
+    expect(scoreAuto(q('q_mcq'), mcqKey, 1)).toBe(2); // still full credit when right
+    expect(scoreAuto(q('q_mcq'), mcqKey, 0)).toBe(0); // floored at 0, not -0.5, so one wrong answer can't drag the total down
+    expect(scoreAuto(q('q_mcq'), k('q_mcq'), 0)).toBe(0); // off by default: same wrong answer costs nothing without it
+    const multiKey = { ...k('q_multi'), negativeMarking: true, penalty: 0.5 };
+    expect(scoreAuto(q('q_multi'), multiKey, [0, 1])).toBe(0.5); // 1 right (1pt) minus 1 wrong (0.5pt) = 0.5
+    expect(scoreAuto(q('q_multi'), multiKey, [1])).toBe(0); // only the wrong option picked, floored at 0
   });
   const resp = (uid, answers, submitted = true) => ({ uid, name: uid, email: uid + '@databeat.io', answers, submitted });
   const good = { q_mcq: 1, q_multi: [0, 2], q_tf: false, q_picture: 0, q_text: 'long answer' };

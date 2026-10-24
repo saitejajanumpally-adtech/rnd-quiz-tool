@@ -58,7 +58,7 @@ export default function Profile() {
               </button>); })}</div>
             <div className="box2" style={{ margin: '16px 0 18px' }}>Rotation: {chosen.length === 1 ? first.short + ' every visit' : chosen.map((i) => MASCOTS.find((m) => m.id === i).short).join(', ') + ' take turns each visit'}</div>
             <div className="lab" style={{ marginBottom: 8 }}>Show mascots</div>
-            <Seg value={prefs.mascotMode || 'moments'} options={[['moments', 'Key moments only (default)'], ['all', 'On every screen'], ['off', 'Off']]} onChange={(v) => savePrefs({ mascotMode: v })} />
+            <Seg value={prefs.mascotMode || 'all'} options={[['all', 'On every screen (default)'], ['moments', 'Key moments only'], ['off', 'Off']]} onChange={(v) => savePrefs({ mascotMode: v })} />
           </div>
           <div className="card"><div className="lab" style={{ color: 'var(--accent)' }}>Preview of {first.short}</div><div className="muted small" style={{ margin: '4px 0 8px' }}>{first.short} in a few moments</div>
             <div className="row" style={{ flexWrap: 'wrap', gap: 10 }}>{[['celebrate', 'Moved up'], ['thinking', 'Reviewing'], ['oops', 'Couldn’t save'], ['sleepy', 'Between rounds']].map(([p, t]) => <div key={p} style={{ flex: '1 1 120px', textAlign: 'center' }}><Mascot id={first.id} pose={p} size={120} still /><div className="small fg2">{t}</div></div>)}</div></div>

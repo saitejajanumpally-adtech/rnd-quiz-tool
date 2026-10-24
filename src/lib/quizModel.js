@@ -20,9 +20,9 @@ export const uid = (p = 'q') => p + Math.random().toString(36).slice(2, 8);
 export function newQuestion(type, id = uid()) {
   const base = { id, type, text: '', ask: '', points: 2, explanation: '', required: false };
   switch (type) {
-    case 'mcq': case 'picture': return { ...base, options: ['', '', '', ''], correct: null, image: '' };
-    case 'multi': return { ...base, options: ['', '', '', ''], correct: [], partial: true };
-    case 'tf': return { ...base, correct: true };
+    case 'mcq': case 'picture': return { ...base, options: ['', '', '', ''], correct: null, image: '', negativeMarking: false, penalty: 0 };
+    case 'multi': return { ...base, options: ['', '', '', ''], correct: [], partial: true, negativeMarking: false, penalty: 0 };
+    case 'tf': return { ...base, correct: true, negativeMarking: false, penalty: 0 };
     case 'text': return { ...base, strong: '', rubric: 'Score 0 to 2 in steps of 0.5. Reward clear reasoning and relevance. Do not reward agreement with a particular view.' };
     case 'order': return { ...base, options: ['', '', ''] };
     case 'match': return { ...base, pairs: [{ l: '', r: '' }, { l: '', r: '' }, { l: '', r: '' }] };
@@ -49,9 +49,9 @@ export function toDocs(a) {
       const pub = { id: q.id, type: q.type, text: q.text, ask: q.ask || '', points: Number(q.points) || 0, required: !!q.required };
       const k = { explanation: q.explanation || '' };
       const seed = `${a.id}:${q.id}`;
-      if (q.type === 'mcq' || q.type === 'picture') { pub.options = q.options.map(String); k.correct = q.correct; if (q.type === 'picture') pub.image = q.image || ''; }
-      else if (q.type === 'multi') { pub.options = q.options.map(String); k.correct = [...q.correct].sort((x, y) => x - y); k.partial = !!q.partial; }
-      else if (q.type === 'tf') { k.correct = !!q.correct; }
+      if (q.type === 'mcq' || q.type === 'picture') { pub.options = q.options.map(String); k.correct = q.correct; if (q.type === 'picture') pub.image = q.image || ''; k.negativeMarking = !!q.negativeMarking; k.penalty = Number(q.penalty) || 0; }
+      else if (q.type === 'multi') { pub.options = q.options.map(String); k.correct = [...q.correct].sort((x, y) => x - y); k.partial = !!q.partial; k.negativeMarking = !!q.negativeMarking; k.penalty = Number(q.penalty) || 0; }
+      else if (q.type === 'tf') { k.correct = !!q.correct; k.negativeMarking = !!q.negativeMarking; k.penalty = Number(q.penalty) || 0; }
       else if (q.type === 'text') { k.strong = q.strong || ''; k.rubric = q.rubric || ''; }
       else if (q.type === 'order') { const perm = permutation(q.options.length, seed); pub.options = perm.map((o) => String(q.options[o])); k.correct = inverse(perm); }
       else if (q.type === 'match') {
@@ -79,9 +79,9 @@ export function fromDocs(id, quiz, key) {
     questions: s.questions.map((p) => {
       const k = ans[p.id] || {};
       const q = { id: p.id, type: p.type, text: p.text, ask: p.ask || '', points: p.points, explanation: k.explanation || '', required: !!p.required };
-      if (p.type === 'mcq' || p.type === 'picture') { q.options = [...p.options]; q.correct = k.correct ?? null; q.image = p.image || ''; }
-      else if (p.type === 'multi') { q.options = [...p.options]; q.correct = k.correct || []; q.partial = k.partial !== false; }
-      else if (p.type === 'tf') q.correct = k.correct !== false;
+      if (p.type === 'mcq' || p.type === 'picture') { q.options = [...p.options]; q.correct = k.correct ?? null; q.image = p.image || ''; q.negativeMarking = !!k.negativeMarking; q.penalty = Number(k.penalty) || 0; }
+      else if (p.type === 'multi') { q.options = [...p.options]; q.correct = k.correct || []; q.partial = k.partial !== false; q.negativeMarking = !!k.negativeMarking; q.penalty = Number(k.penalty) || 0; }
+      else if (p.type === 'tf') { q.correct = k.correct !== false; q.negativeMarking = !!k.negativeMarking; q.penalty = Number(k.penalty) || 0; }
       else if (p.type === 'text') { q.strong = k.strong || ''; q.rubric = k.rubric || ''; }
       else if (p.type === 'order') { q.options = (k.correct || p.options.map((_, i) => i)).map((pubIdx) => p.options[pubIdx]); }
       else if (p.type === 'match') { q.pairs = p.left.map((l, i) => ({ l, r: p.right[(k.correct || {})[String(i)] ?? i] })); }
@@ -118,6 +118,7 @@ export function questionErrors(q) {
   if (q.type === 'match' && (q.pairs.length < 2 || q.pairs.some((p) => !p.l.trim() || !p.r.trim()))) e.push('fill in at least two complete pairs.');
   if (q.type === 'text' && !(q.rubric || '').trim()) e.push('add a scoring rubric.');
   if (q.type !== 'rating' && !(Number(q.points) > 0)) e.push('points must be more than 0.');
+  if (q.negativeMarking && !(Number(q.penalty) > 0)) e.push('set how many points to deduct for a wrong answer, or turn negative marking off.');
   return e;
 }
 // `otherTitles` (optional): [{id, title}] for every other quiz, so a quiz can be blocked from publishing

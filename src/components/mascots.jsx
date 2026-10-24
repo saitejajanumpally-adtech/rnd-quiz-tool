@@ -34,7 +34,7 @@ const MOMENT = {
 export const ALL_ONLY = new Set(['welcome', 'sectionStart', 'sectionDone', 'closed', 'answerKey', 'empty', 'checklistDone', 'noQuizzes']);
 export const poseFor = (moment) => MOMENT[moment] || 'wave';
 // Whether a moment shows for the person's "Show mascots" choice.
-export const showsMoment = (moment, mode = 'moments') => !(mode === 'off' || (ALL_ONLY.has(moment) && mode !== 'all'));
+export const showsMoment = (moment, mode = 'all') => !(mode === 'off' || (ALL_ONLY.has(moment) && mode !== 'all'));
 export const scoreMoment = (total, max) => (max ? (total / max >= 0.8 ? 'resultHigh' : total / max >= 0.5 ? 'resultMid' : 'resultLow') : 'resultMid');
 
 // Several lines per moment so they do not repeat. Messages never include anyone else's score.
@@ -87,7 +87,7 @@ export function useMascot() {
   const { prefs, settings } = useApp();
   return useMemo(() => {
     const ids = chosenIds(prefs, settings); const id = ids[visitNumber() % ids.length];
-    return { id, mode: prefs.mascotMode || 'moments', ...MASCOTS.find((m) => m.id === id) };
+    return { id, mode: prefs.mascotMode || 'all', ...MASCOTS.find((m) => m.id === id) };
   }, [prefs, settings]);
 }
 export function lineFor(moment, vars, m, seed = 0) {

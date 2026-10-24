@@ -195,7 +195,7 @@ export default function QuizPage({ id }) {
         <button className={'sec' + (review ? ' on' : '')} onClick={() => setSi(secs.length)}><span className="lab" style={{ color: review ? 'var(--accent)' : 'var(--muted)' }}>Finish</span><b>Review and submit</b></button>
       </div>
       {justDone && si > 0 && !review && !flat && <div className="mb"><Bolt moment="sectionDone" card={false} size={72} /></div>}
-      {si === 0 && !review && <div className="mb"><Bolt moment="sectionStart" vars={{ n: 1, total: secs.length, title: flat ? 'the questions' : sec.title }} card={false} size={72} /></div>}
+      {si === 0 && !review && !flat && <div className="mb"><Bolt moment="sectionStart" vars={{ n: 1, total: secs.length, title: sec.title }} card={false} size={72} /></div>}
       {!review && sec && (<div className="pan" key={si}>
         <div className="row between center" style={{ marginBottom: 6 }}><div><div className="h2" style={{ fontSize: 22 }}>{flat ? 'Questions' : sec.title}</div>{sec.intro && <div className="muted" style={{ marginTop: 2 }}>{sec.intro}</div>}</div><div className="row center" style={{ gap: 10 }}>{left !== null && <span className="chip warn" role="timer">{Math.floor(left / 60000)}:{String(Math.floor((left % 60000) / 1000)).padStart(2, '0')} left</span>}<span className="chip">{sec.questions.filter((q) => isAnswered(answers[q.id])).length} of {sec.questions.length} answered</span></div></div>
         <div className="bar mb"><i style={{ width: (sec.questions.length ? (sec.questions.filter((q) => isAnswered(answers[q.id])).length / sec.questions.length) * 100 : 0) + '%' }} /></div>

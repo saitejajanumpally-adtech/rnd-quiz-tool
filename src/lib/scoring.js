@@ -16,14 +16,18 @@ export const answeredCount = (quiz, answers) => allQuestions(quiz).filter((q) =>
 export function scoreAuto(q, k, ans) {
   const pts = Number(q.points) || 0;
   if (!k || !isAnswered(ans)) return 0;
+  // Negative marking is opt-in per question (Editor, under Points) and off by default: a wrong answer
+  // simply scores 0 unless the creator turned it on and set how many points a wrong answer costs.
+  const penalty = k.negativeMarking ? Math.max(0, Number(k.penalty) || 0) : 0;
   switch (q.type) {
-    case 'mcq': case 'picture': return ans === k.correct ? pts : 0;
-    case 'tf': return ans === k.correct ? pts : 0;
+    case 'mcq': case 'picture': return clamp(ans === k.correct ? pts : -penalty, 0, pts);
+    case 'tf': return clamp(ans === k.correct ? pts : -penalty, 0, pts);
     case 'multi': {
       const cor = k.correct || []; const sel = Array.isArray(ans) ? ans : [];
       const right = sel.filter((x) => cor.includes(x)).length; const wrong = sel.length - right;
       if (k.partial === false) return right === cor.length && wrong === 0 ? pts : 0;
-      return round05(Math.max(0, (right - wrong) / (cor.length || 1)) * pts);
+      const creditPerRight = pts / (cor.length || 1);
+      return round05(clamp(right * creditPerRight - wrong * penalty, 0, pts));
     }
     case 'order': { const c = k.correct || []; return Array.isArray(ans) && ans.length === c.length && ans.every((v, i) => v === c[i]) ? pts : 0; }
     case 'match': {

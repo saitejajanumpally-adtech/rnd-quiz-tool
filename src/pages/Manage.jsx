@@ -6,7 +6,7 @@ import * as ops from '../lib/ops.js';
 import { parseWrittenUpload, SCORING_COLUMNS, CLAUDE_MESSAGE } from '../lib/written.js';
 import { Bolt } from '../components/mascots.jsx';
 import { download } from '../lib/csv.js';
-import { fmtDateTime, fmtRange, toInputValue, fromInputValue } from '../lib/time.js';
+import { fmtDateTime, fmtRange, toInputValue, fromInputValue, rangeStart } from '../lib/time.js';
 import { Spinner, ErrorBox, useAsync, Chip, Tile, Seg } from '../components/ui.jsx';
 
 // Shown on a quiz's Manage page to its owner/admins: pending requests from other creators asking for edit access.
@@ -29,15 +29,19 @@ function AccessRequests({ id, item, user, toast }) {
 const TONE = { draft: '', scheduled: 'info', live: 'ok', closed: 'warn', released: 'ok' };
 const copy = async (t, toast) => { try { await navigator.clipboard.writeText(t); toast('Copied.'); } catch (e) { toast('Copy failed. Select the text and copy it by hand.', 'err'); } };
 
+const DATE_RANGES = [['all', 'All time'], ['quarter', 'This quarter'], ['m6', 'Last 6 months'], ['m12', 'Last 12 months']];
 export function ManageList() {
   const { role, user, index, now, toast, ask, reload } = useApp(); const isAdmin = role === 'admin';
   const [tab, setTab] = useState('active'); const [busy, setBusy] = useState('');
-  const items = Object.values(index).sort((a, b) => b.opens - a.opens);
-  const rel = items.filter((i) => i.released);
+  const [status, setStatus] = useState('all'); const [range, setRange] = useState('all'); const [who, setWho] = useState('');
+  const allItems = Object.values(index).sort((a, b) => b.opens - a.opens);
+  const from = range === 'all' ? 0 : rangeStart(range, now);
+  const items = allItems.filter((i) => (status === 'all' || quizStatus(i, now) === status) && i.opens >= from && ownerLabel(i).toLowerCase().includes(who.toLowerCase()));
+  const rel = allItems.filter((i) => i.released);
   const avgSub = rel.length ? Math.round(rel.reduce((a, i) => a + (i.submittedCount || 0), 0) / rel.length) : 0;
   const avgScore = rel.length ? (rel.reduce((a, i) => a + (i.avgScore || 0), 0) / rel.length).toFixed(1) : '–';
-  const arch = useAsync(() => (isAdmin ? ops.loadArchivedIndex() : {}), [isAdmin, items.length]);
-  const archived = Object.values(arch.data || {}).sort((a, b) => b.opens - a.opens);
+  const arch = useAsync(() => (isAdmin ? ops.loadArchivedIndex() : {}), [isAdmin, allItems.length]);
+  const archived = Object.values(arch.data || {}).sort((a, b) => b.opens - a.opens).filter((i) => i.opens >= from && ownerLabel(i).toLowerCase().includes(who.toLowerCase()));
   const act = async (i, name, fn, okMsg) => { setBusy(i.id + name); try { await fn(); await reload(); arch.reload(); toast(okMsg); } catch (e) { toast('That didn\'t work. ' + (e.message || ''), 'err'); } setBusy(''); };
   const archive = async (i) => { if (await ask({ title: 'Archive this quiz?', body: 'It leaves the Quiz library and the leaderboards, and stops counting towards everyone\'s points, streaks and averages. Only admins can still see it, and you can restore it any time. Nothing is deleted.', ok: 'Archive quiz' })) act(i, 'a', () => ops.setArchived(i.id, true, user, i.title), 'Quiz archived.'); };
   const restore = (i) => act(i, 'r', () => ops.setArchived(i.id, false, user, i.title), 'Quiz restored.');
@@ -51,16 +55,23 @@ export function ManageList() {
     <div className="pan mt">
       <div className="row between center mb"><div className="h2">Manage quizzes</div><a className="btn p" href="#/edit/new">New quiz</a></div>
       <div className="row mb"><Tile label="Quizzes conducted" value={rel.length} /><Tile label="Average submissions" value={rel.length ? avgSub : '–'} /><Tile label="Average score" value={avgScore} unit={rel.length ? '/ 10' : ''} /></div>
-      {isAdmin && <div className="subtabs"><button className={'btn sm ' + (tab === 'active' ? 's' : '')} aria-pressed={tab === 'active'} onClick={() => setTab('active')}>Active · {items.length}</button><button className={'btn sm ' + (tab === 'archived' ? 's' : '')} aria-pressed={tab === 'archived'} onClick={() => setTab('archived')}>Archived · {archived.length} <span className="muted" style={{ fontSize: 11 }}>(admins only)</span></button></div>}
+      {isAdmin && <div className="subtabs"><button className={'btn sm ' + (tab === 'active' ? 's' : '')} aria-pressed={tab === 'active'} onClick={() => setTab('active')}>Active · {allItems.length}</button><button className={'btn sm ' + (tab === 'archived' ? 's' : '')} aria-pressed={tab === 'archived'} onClick={() => setTab('archived')}>Archived · {Object.keys(arch.data || {}).length} <span className="muted" style={{ fontSize: 11 }}>(admins only)</span></button></div>}
+      {allItems.length > 8 && <div className="row center mb" style={{ gap: 20, flexWrap: 'wrap', marginTop: 10 }}>
+        {tab === 'active' && <div><div className="lab" style={{ marginBottom: 6 }}>Status</div><Seg value={status} options={[['all', 'All'], ['draft', 'Draft'], ['scheduled', 'Scheduled'], ['live', 'Live'], ['closed', 'Closed'], ['released', 'Released']]} onChange={setStatus} /></div>}
+        <div><div className="lab" style={{ marginBottom: 6 }}>Opened</div><Seg value={range} options={DATE_RANGES} onChange={setRange} /></div>
+        <div className="field" style={{ minWidth: 200 }}><label>Created by</label><input className="input" placeholder="Search by name or email" aria-label="Filter by creator" value={who} onChange={(e) => setWho(e.target.value)} /></div>
+      </div>}
       {tab === 'active' && <div className="card"><div className="scroll"><table className="tbl"><thead><tr><th>Quiz</th><th>Status</th><th>Created by</th><th>Dates</th><th className="num">Submitted</th><th /></tr></thead><tbody>
-        {items.length === 0 && <tr><td colSpan="6"><div className="row center" style={{ gap: 16 }}><Bolt moment="noQuizzes" card={false} size={96} /><span className="muted">No quizzes yet. Create the first one.</span></div></td></tr>}
+        {items.length === 0 && allItems.length === 0 && <tr><td colSpan="6"><div className="row center" style={{ gap: 16 }}><Bolt moment="noQuizzes" card={false} size={96} /><span className="muted">No quizzes yet. Create the first one.</span></div></td></tr>}
+        {items.length === 0 && allItems.length > 0 && <tr><td colSpan="6" className="muted">No quizzes match these filters.</td></tr>}
         {items.map((i) => { const st = quizStatus(i, now); return (
           <tr key={i.id}><td><a href={'#/manage/' + i.id} style={{ color: 'var(--fg)', fontWeight: 500 }}>{i.title || 'Untitled'}</a></td><td><Chip tone={TONE[st]}>{STATUS_LABEL[st]}</Chip></td><td className="fg2">{ownerLabel(i)}</td><td className="fg2">{i.opens ? fmtRange(i.opens, i.closes) : '–'}</td><td className="num">{i.released ? i.submittedCount : '–'}</td>
             <td style={{ textAlign: 'right' }}><span className="row" style={{ justifyContent: 'flex-end', gap: 8 }}><a className="btn sm s" href={'#/manage/' + i.id}>{st === 'closed' ? 'Release checklist' : 'Open'}</a>{isAdmin && <button className="btn sm" disabled={!!busy} onClick={() => archive(i)}>Archive</button>}{isAdmin && <button className="btn sm danger" disabled={!!busy} onClick={() => del(i)}>Delete</button>}</span></td></tr>); })}
       </tbody></table></div></div>}
       {tab === 'archived' && isAdmin && <div className="card"><div className="row between center mb"><div className="lab">Archived quizzes · admins only</div><Chip>Hidden from everyone else</Chip></div><div className="scroll"><table className="tbl"><thead><tr><th>Quiz</th><th>Created by</th><th>Archived on</th><th className="num">Submitted</th><th /></tr></thead><tbody>
         {arch.loading && <tr><td colSpan="5"><Spinner /></td></tr>}
-        {!arch.loading && archived.length === 0 && <tr><td colSpan="5" className="muted">Nothing archived. Archive a quiz from the Active tab to hide it everywhere.</td></tr>}
+        {!arch.loading && archived.length === 0 && Object.keys(arch.data || {}).length === 0 && <tr><td colSpan="5" className="muted">Nothing archived. Archive a quiz from the Active tab to hide it everywhere.</td></tr>}
+        {!arch.loading && archived.length === 0 && Object.keys(arch.data || {}).length > 0 && <tr><td colSpan="5" className="muted">No archived quizzes match these filters.</td></tr>}
         {archived.map((i) => <tr key={i.id}><td className="fg2">{i.title}</td><td className="muted">{ownerLabel(i)}</td><td className="muted">{i.archivedAt ? fmtDateTime(i.archivedAt) : '–'}</td><td className="num muted">{i.released ? i.submittedCount : '–'}</td><td style={{ textAlign: 'right' }}><span className="row" style={{ justifyContent: 'flex-end', gap: 8 }}><button className="btn sm s" disabled={!!busy} onClick={() => restore(i)}>Restore</button><button className="btn sm danger" disabled={!!busy} onClick={() => del(i)}>Delete</button></span></td></tr>)}
       </tbody></table></div></div>}
     </div>
@@ -89,18 +100,52 @@ function WrittenScoring({ id, item, run, busy }) {
   );
 }
 
+// Shared by WrittenReview and the Review requests card: prompts for a new score + a reason, saves it.
+// Returns true on success so a caller doing something else afterward (like closing a request) knows to proceed.
+async function changeWrittenScore({ id, row, item, user, toast, ask, silent }) {
+  const s = await ask({ title: 'Change this score', body: `${row.name} · maximum ${row.max} points. Scores go in steps of 0.5.`, input: { label: 'New score', initial: row.score === null ? '' : String(row.score), required: true }, ok: 'Next' }); if (s === null) return false;
+  const n = Number(s); if (Number.isNaN(n) || n < 0 || n > row.max || Math.abs(n * 2 - Math.round(n * 2)) > 1e-9) { toast(`Enter a number from 0 to ${row.max} in steps of 0.5.`, 'err'); return false; }
+  const reason = await ask({ title: 'Why are you changing it?', body: 'The reason is saved in the change log.', input: { label: 'Reason', multiline: true, required: true }, ok: 'Save score' }); if (!reason) return false;
+  try { await ops.overrideWritten(id, row, n, row.feedback, reason, user, item.title); if (!silent) toast('Score saved. Recalculate to update totals.'); return true; }
+  catch (e) { toast('Couldn\'t save that score.', 'err'); return false; }
+}
+
+// Shown on a quiz's Manage page: participants' requests to have a written-answer score re-checked.
+// "Change score" opens their actual answer and saves a new score (the same action available from
+// Review flagged answers); "Mark done" alone is for requests where the existing score stands.
+function ReviewRequests({ id, item, user, toast, ask, can }) {
+  const { data, loading, reload } = useAsync(() => ops.listReviewRequests(id), [id]);
+  const open = (data || []).filter((r) => r.status === 'open');
+  const changeScore = async (r) => {
+    try {
+      const rows = await ops.loadWrittenReview(id);
+      const row = rows.find((x) => x.uid === r.uid && x.qid === r.qid);
+      if (!row) { toast('Couldn\'t find that answer anymore — it may belong to a question that was changed.', 'err'); return; }
+      const ok = await changeWrittenScore({ id, row, item, user, toast, ask, silent: true });
+      if (ok) { await ops.resolveReview(r, 'done', user); toast('Score updated and the request closed.'); reload(); }
+    } catch (e) { toast('That didn\'t work. ' + (e.message || ''), 'err'); }
+  };
+  const markDone = async (r) => { await ops.resolveReview(r, 'done', user); toast('Request closed.'); reload(); };
+  return (
+    <div className="card mt"><div className="h3" style={{ marginBottom: 8 }}>Review requests{open.length > 0 ? ` · ${open.length} open` : ''}</div>
+      {loading ? <Spinner /> : (data || []).length === 0 ? <div className="muted">No requests yet.</div> : data.map((r) => <div key={r.id} className="box2" style={{ whiteSpace: 'normal' }}>
+        <div className="row between"><b style={{ fontWeight: 500 }}>{r.email} · {r.qid}</b><span className="row center" style={{ gap: 8 }}><Chip tone={r.status === 'open' ? 'warn' : 'ok'}>{r.status}</Chip>
+          {r.status === 'open' && can && <button className="btn sm s" onClick={() => changeScore(r)}>Change score</button>}
+          {r.status === 'open' && can && <button className="btn sm" onClick={() => markDone(r)}>Mark done, no change</button>}
+        </span></div>
+        <div className="fg2" style={{ marginTop: 6 }}>{r.note}</div>
+      </div>)}
+    </div>
+  );
+}
+
 function WrittenReview({ id, item, quiz }) {
   const { user, toast, ask } = useApp(); const [f, setF] = useState('flag'); const [page, setPage] = useState(0);
   const { loading, data, error, reload } = useAsync(() => ops.loadWrittenReview(id), [id]);
   if (error) return <ErrorBox error={error} />; if (loading || !data) return <Spinner />;
   const rows = data.filter((r) => f === 'all' || (f === 'flag' && (r.flag || r.score === null)) || (f === 'over' && r.overridden));
   const per = 10;
-  const override = async (r) => {
-    const s = await ask({ title: 'Change this score', body: `${r.name} · maximum ${r.max} points. Scores go in steps of 0.5.`, input: { label: 'New score', initial: r.score === null ? '' : String(r.score), required: true }, ok: 'Next' }); if (s === null) return;
-    const n = Number(s); if (Number.isNaN(n) || n < 0 || n > r.max || Math.abs(n * 2 - Math.round(n * 2)) > 1e-9) { toast(`Enter a number from 0 to ${r.max} in steps of 0.5.`, 'err'); return; }
-    const reason = await ask({ title: 'Why are you changing it?', body: 'The reason is saved in the change log.', input: { label: 'Reason', multiline: true, required: true }, ok: 'Save score' }); if (!reason) return;
-    try { await ops.overrideWritten(id, r, n, r.feedback, reason, user, item.title); toast('Score saved. Recalculate to update totals.'); reload(); } catch (e) { toast('Couldn\'t save that score.', 'err'); }
-  };
+  const override = async (r) => { const ok = await changeWrittenScore({ id, row: r, item, user, toast, ask }); if (ok) reload(); };
   return (
     <div style={{ marginTop: 12 }}>
       <div className="row between center mb"><Seg value={f} options={[['flag', 'Flagged or unscored'], ['over', 'Overridden'], ['all', 'All']]} onChange={(v) => { setF(v); setPage(0); }} /><span className="muted small">{rows.length} answers</span></div>
@@ -118,7 +163,7 @@ export function ManageQuiz({ id }) {
   useEffect(() => { if (justPublished) { try { sessionStorage.removeItem('arena-published'); } catch (e) { /* ignore */ } } }, []); // eslint-disable-line
   const [closesIn, setClosesIn] = useState(item ? toInputValue(item.closes) : '');
   const st = item ? quizStatus(item, now) : 'none'; const can = item ? ops.canEditQuiz(role, user.email, item) : false;
-  const log = useAsync(() => ops.loadChangeLog(60), [id]); const reviews = useAsync(() => (item && item.allowReviewRequests ? ops.listReviewRequests(id) : []), [id, item && item.allowReviewRequests]);
+  const log = useAsync(() => ops.loadChangeLog(60), [id]);
   const quizDoc = useAsync(() => store.get('quizzes/' + id), [id]);
   useEffect(() => { if (item && (st === 'live' || st === 'closed')) ops.liveCounts(id).then(setCounts).catch(() => {}); }, [id, st]); // eslint-disable-line
   if (!item) return Object.keys(index).length ? <div className="card mt"><div className="h3">That quiz doesn't exist</div><a href="#/manage">Back to Manage quizzes</a></div> : <Spinner />;
@@ -170,7 +215,7 @@ export function ManageQuiz({ id }) {
 
       {(st === 'scheduled' || st === 'live') && can && <div className="card mt"><div className="h3" style={{ marginBottom: 8 }}>Announcement</div><div className="box2" style={{ whiteSpace: 'pre-wrap' }}>{msg}</div><div className="row"><button className="btn sm" onClick={() => copy(msg, toast)}>Copy Chat message</button><a className="btn sm" target="_blank" rel="noreferrer" href={`https://mail.google.com/mail/?view=cm&fs=1&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(msg)}`}>Open email draft in Gmail</a>{gas && <button className="btn sm s" onClick={() => run('ann', async () => { await ops.queueOutbox('chat', { text: msg }, user); await ops.queueOutbox('emailDraft', { subject, body: msg }, user); await ops.markOp(id, 'announceAt', user, 'Queued announcement'); }, 'Announcement queued for Chat and an email draft.')}>Send to Chat and email</button>}</div></div>}
 
-      {item.allowReviewRequests && <div className="card mt"><div className="h3" style={{ marginBottom: 8 }}>Review requests</div>{reviews.loading ? <Spinner /> : (reviews.data || []).length === 0 ? <div className="muted">No requests yet.</div> : reviews.data.map((r) => <div key={r.id} className="box2" style={{ whiteSpace: 'normal' }}><div className="row between"><b style={{ fontWeight: 500 }}>{r.email} · {r.qid}</b><span className="row center"><Chip tone={r.status === 'open' ? 'warn' : 'ok'}>{r.status}</Chip>{r.status === 'open' && can && <button className="btn sm" onClick={async () => { await ops.resolveReview(r, 'done', user); toast('Request closed.'); reviews.reload(); }}>Mark done</button>}</span></div><div className="fg2" style={{ marginTop: 6 }}>{r.note}</div></div>)}</div>}
+      {item.allowReviewRequests && <ReviewRequests id={id} item={item} user={user} toast={toast} ask={ask} can={can} />}
 
       <div className="card mt"><div className="h3" style={{ marginBottom: 8 }}>Who can edit</div>
         <div className="fg2">Admins and {ownerLabel(item)} (the owner) can edit this quiz.{can && item.editors && item.editors.length > 0 ? ' Also shared with:' : ''}</div>
