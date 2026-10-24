@@ -49,6 +49,7 @@ export function RolesPage() {
 export function AdminSettings() {
   const { settings, user, reload, toast, index } = useApp(); const [tab, setTab] = useState('settings');
   const [th, setTh] = useState(settings.thresholds.map(String)); const [deflt, setDeflt] = useState(settings.defaultMascots || ['robot']); const [editTh, setEditTh] = useState(false); const [busy, setBusy] = useState(false);
+  const [folderInput, setFolderInput] = useState((settings.integrations && settings.integrations.sheetFolderId) || '');
   const save = async (patch, msg = 'Saved.') => { try { await ops.saveSettings(patch, user); await reload(); toast(msg); } catch (e) { toast('The database refused that change.', 'err'); } };
   const log = useAsync(() => (tab === 'log' ? ops.loadChangeLog(120) : []), [tab]);
   const out = useAsync(() => (tab === 'int' ? ops.loadOutbox() : []), [tab]);
@@ -65,6 +66,8 @@ export function AdminSettings() {
   const Row = ({ title, sub, children }) => <div className="row between center" style={{ padding: '14px 0', borderTop: '1px solid var(--border)', gap: 20 }}><div style={{ minWidth: 0, flex: '1 1 180px' }}><div style={{ fontWeight: 500 }}>{title}</div><div className="muted small" style={{ marginTop: 2 }}>{sub}</div></div><div style={{ flex: '0 1 auto', minWidth: 0 }}>{children}</div></div>;
   const Group = ({ title, note, children }) => <div className="card" style={{ padding: 22 }}><div className="lab" style={{ color: 'var(--accent)', marginBottom: 4 }}>{title}</div>{note && <div className="muted small" style={{ marginBottom: 2 }}>{note}</div>}{children}</div>;
   const Sw = ({ on, onChange, label }) => <button className="switch" role="switch" aria-checked={on} aria-label={label} style={{ width: 'auto', border: 0, padding: 0 }} onClick={() => onChange(!on)}><span className={'track' + (on ? ' on' : '')} /></button>;
+  const driveFolderId = (s) => { const m = s.trim().match(/\/folders\/([a-zA-Z0-9_-]+)/); return (m ? m[1] : s.trim()); };
+  const saveFolder = () => { const id = driveFolderId(folderInput); setFolderInput(id); save({ integrations: { ...(settings.integrations || {}), sheetFolderId: id } }, id ? 'Backup folder updated. New backups will go there.' : 'Backup folder cleared.'); };
   const sum = users.data ? usersSummary(users.data.users) : null;
   const Tot = ({ l, v, c }) => <div className="row between" style={{ padding: '10px 0', borderTop: '1px solid var(--border)' }}><span className="fg2">{l}</span><span className="mono" style={{ fontSize: 18, color: c || 'var(--fg)' }}>{v}</span></div>;
   return (
@@ -108,6 +111,13 @@ export function AdminSettings() {
         {tab === 'int' && <><div className="h3" style={{ marginBottom: 4 }}>Integrations and scoring</div>
           <div className="fg2" style={{ marginBottom: 8 }}>The Google Apps Script helper posts to Google Chat, creates email drafts, and copies responses to Google Sheets. Without it, every one of these steps still works by copying the message or downloading a file.</div>
           <Switch on={!!(settings.integrations && settings.integrations.gas)} onChange={(v) => save({ integrations: { ...(settings.integrations || {}), gas: v } }, v ? 'Helper turned on. Make sure the script is set up.' : 'Helper turned off.')} title="Apps Script helper is set up" sub="Turn this on only after finishing the setup guide, so jobs don't wait with nobody to run them." />
+          <div className="lab" style={{ margin: '18px 0 8px' }}>Backup folder</div>
+          <div className="fg2" style={{ marginBottom: 8 }}>Every "Backup to Drive" click saves a new Sheet into this Google Drive folder. Change it any time — the next backup goes to the new folder; nothing already backed up is moved.</div>
+          <div className="row center" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <input className="input" style={{ flex: '1 1 320px', minWidth: 0 }} aria-label="Backup folder link or ID" placeholder="Paste the folder's Drive link, or just its ID" value={folderInput} onChange={(e) => setFolderInput(e.target.value)} />
+            <button className="btn sm p" onClick={saveFolder}>Save folder</button>
+          </div>
+          <div className="muted small" style={{ marginTop: 6 }}>Open the folder in Google Drive and copy its address bar link (drive.google.com/drive/folders/&lt;long id&gt;) — paste the whole thing here, no need to trim it down.</div>
           <div className="lab" style={{ margin: '18px 0 8px' }}>Scoring written answers</div><div className="fg2">Export, score in Claude, upload. No API key is stored anywhere.</div>
           {settings.integrations && settings.integrations.gas && <><div className="lab" style={{ margin: '18px 0 8px' }}>Recent helper jobs</div>{out.loading ? <Spinner /> : (out.data || []).length === 0 ? <div className="muted">No jobs yet.</div> : out.data.map((j) => <div key={j.id} className="row between" style={{ padding: '8px 0', borderTop: '1px solid var(--border)' }}><span>{j.type}<span className="muted small"> · {j.by}</span>{j.error && <div className="small" style={{ color: 'var(--danger)' }}>{j.error}</div>}</span><span className="row center"><Chip tone={j.status === 'done' ? 'ok' : j.status === 'error' ? 'bad' : 'warn'}>{j.status}</Chip><span className="muted small">{fmtDateTime(j.at)}</span></span></div>)}</>}</>}
         {tab === 'log' && <><div className="row between center mb"><div><div className="h3">Change log</div><div className="fg2">Every override, role change, release and setting change.</div></div><input className="input" style={{ width: 220 }} aria-label="Filter the log" placeholder="Filter" value={fq} onChange={(e) => setFq(e.target.value)} /></div>

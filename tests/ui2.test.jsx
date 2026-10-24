@@ -118,6 +118,19 @@ describe('required questions and the finish flow', () => {
 });
 
 describe('quiz editor', () => {
+  it('blocks a creator from editing a quiz they do not own, and lets them request access', async () => {
+    const { newQuiz } = await import('../src/lib/quizModel.js');
+    const a = newQuiz({ opens: Date.now() - 1000, closes: Date.now() + 86400000 }, 'saiteja.janumpally@databeat.io', {}, 'Sai Teja');
+    a.id = 'z_notmine'; a.title = 'Someone else\'s quiz';
+    await ops.saveQuiz(a, { email: 'saiteja.janumpally@databeat.io', name: 'Sai Teja' }, { publish: true });
+    render(<App />); await persona('Charan'); await go('#/edit/z_notmine');
+    expect(await screen.findByText("You can't edit this quiz")).toBeTruthy();
+    expect(screen.getByText(/Sai Teja owns this one/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Request edit access' }));
+    expect((await screen.findByRole('status')).textContent).toMatch(/Request sent/);
+    const reqs = await ops.listAccessRequests();
+    expect(reqs.some((r) => r.quizId === 'z_notmine' && r.email === 'creator@databeat.io')).toBe(true);
+  });
   it('starts empty with a format picker, takes a Required question with formatting, and sections are optional', async () => {
     render(<App />); await persona('Sai Teja'); await go('#/edit/new');
     expect(await screen.findByText('Create quiz')).toBeTruthy();

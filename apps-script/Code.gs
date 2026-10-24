@@ -14,7 +14,8 @@
  *   FIREBASE_PROJECT_ID   your Firebase project id, for example rnd-quiz-arena
  *   CHAT_WEBHOOK_URL      the incoming webhook URL of your Google Chat space (optional)
  *   EMAIL_TO              who email drafts are addressed to, for example a team list address (optional)
- *   SHEET_FOLDER_ID       the Google Drive folder for backup sheets (optional)
+ *   SHEET_FOLDER_ID       fallback Google Drive folder for backup sheets, only used if the app's own
+ *                         "Backup folder" (Admin -> Integrations) is left empty (optional)
  */
 
 function props_() { return PropertiesService.getScriptProperties(); }
@@ -98,9 +99,17 @@ function doSheetBackup_(p) {
   });
   var ss = SpreadsheetApp.create((p.title || p.quizId) + ' - responses backup');
   ss.getActiveSheet().getRange(1, 1, out.length, header.length).setValues(out);
-  var folder = props_().getProperty('SHEET_FOLDER_ID');
+  var folder = backupFolderId_();
   if (folder) DriveApp.getFileById(ss.getId()).moveTo(DriveApp.getFolderById(folder));
   return ss.getUrl();
+}
+// The folder an admin picked in the app (Admin -> Integrations -> Backup folder) wins; the script
+// property is only a fallback for before that setting existed, or if it's left blank.
+function backupFolderId_() {
+  var settings = {};
+  try { settings = getDoc_('settings/app'); } catch (e) { settings = {}; }
+  var fromApp = settings.integrations && settings.integrations.sheetFolderId;
+  return fromApp || props_().getProperty('SHEET_FOLDER_ID');
 }
 
 function handle_(job) {

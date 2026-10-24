@@ -9,6 +9,23 @@ import { download } from '../lib/csv.js';
 import { fmtDateTime, fmtRange, toInputValue, fromInputValue } from '../lib/time.js';
 import { Spinner, ErrorBox, useAsync, Chip, Tile, Seg } from '../components/ui.jsx';
 
+// Shown on a quiz's Manage page to its owner/admins: pending requests from other creators asking for edit access.
+function AccessRequests({ id, item, user, toast }) {
+  const { data, loading, reload } = useAsync(() => ops.listAccessRequests(), [id]);
+  const mine = (data || []).filter((r) => r.quizId === id);
+  const resolve = async (r, grant) => {
+    try { await ops.resolveAccess(r, grant, { [id]: item }, user); toast(grant ? `Granted ${r.email} edit access.` : 'Request declined.'); reload(); }
+    catch (e) { toast('That didn\'t work. ' + (e.message || ''), 'err'); }
+  };
+  if (loading || mine.length === 0) return null;
+  return (
+    <div className="mt" style={{ paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+      <div className="lab" style={{ marginBottom: 8 }}>Pending edit access requests</div>
+      {mine.map((r) => <div key={r.id} className="row between center" style={{ padding: '6px 0' }}><span>{r.email}</span><span className="row" style={{ gap: 8 }}><button className="btn sm s" onClick={() => resolve(r, true)}>Grant</button><button className="btn sm" onClick={() => resolve(r, false)}>Decline</button></span></div>)}
+    </div>
+  );
+}
+
 const TONE = { draft: '', scheduled: 'info', live: 'ok', closed: 'warn', released: 'ok' };
 const copy = async (t, toast) => { try { await navigator.clipboard.writeText(t); toast('Copied.'); } catch (e) { toast('Copy failed. Select the text and copy it by hand.', 'err'); } };
 
@@ -24,7 +41,12 @@ export function ManageList() {
   const act = async (i, name, fn, okMsg) => { setBusy(i.id + name); try { await fn(); await reload(); arch.reload(); toast(okMsg); } catch (e) { toast('That didn\'t work. ' + (e.message || ''), 'err'); } setBusy(''); };
   const archive = async (i) => { if (await ask({ title: 'Archive this quiz?', body: 'It leaves the Quiz library and the leaderboards, and stops counting towards everyone\'s points, streaks and averages. Only admins can still see it, and you can restore it any time. Nothing is deleted.', ok: 'Archive quiz' })) act(i, 'a', () => ops.setArchived(i.id, true, user, i.title), 'Quiz archived.'); };
   const restore = (i) => act(i, 'r', () => ops.setArchived(i.id, false, user, i.title), 'Quiz restored.');
-  const del = async (i) => { if (await ask({ title: 'Delete this quiz?', body: 'This can\'t be undone. A quiz that anyone has answered, or that was released, can\'t be deleted. Archive it instead.', ok: 'Delete quiz', danger: true })) act(i, 'd', () => ops.deleteQuiz(i.id, user, i.title), 'Quiz deleted.'); };
+  const del = async (i) => {
+    const typed = await ask({ title: 'Delete this quiz?', body: `This permanently deletes "${i.title}" and every response, score and leaderboard entry for it — it disappears from each participant's own history too. This can't be undone. Archive it instead if you want to keep that history.\n\nType the quiz's exact name to confirm.`, input: { label: 'Quiz name', placeholder: i.title, required: true }, ok: 'Delete quiz', danger: true });
+    if (typed === null) return;
+    if (typed.trim() !== i.title.trim()) { toast('That didn\'t match the quiz name exactly. Nothing was deleted.', 'err'); return; }
+    act(i, 'd', () => ops.deleteQuiz(i.id, user, i.title), 'Quiz deleted.');
+  };
   return (
     <div className="pan mt">
       <div className="row between center mb"><div className="h2">Manage quizzes</div><a className="btn p" href="#/edit/new">New quiz</a></div>
@@ -34,12 +56,12 @@ export function ManageList() {
         {items.length === 0 && <tr><td colSpan="6"><div className="row center" style={{ gap: 16 }}><Bolt moment="noQuizzes" card={false} size={96} /><span className="muted">No quizzes yet. Create the first one.</span></div></td></tr>}
         {items.map((i) => { const st = quizStatus(i, now); return (
           <tr key={i.id}><td><a href={'#/manage/' + i.id} style={{ color: 'var(--fg)', fontWeight: 500 }}>{i.title || 'Untitled'}</a></td><td><Chip tone={TONE[st]}>{STATUS_LABEL[st]}</Chip></td><td className="fg2">{ownerLabel(i)}</td><td className="fg2">{i.opens ? fmtRange(i.opens, i.closes) : '–'}</td><td className="num">{i.released ? i.submittedCount : '–'}</td>
-            <td style={{ textAlign: 'right' }}><span className="row" style={{ justifyContent: 'flex-end', gap: 8 }}><a className="btn sm s" href={'#/manage/' + i.id}>{st === 'closed' ? 'Release checklist' : 'Open'}</a>{isAdmin && <button className="btn sm" disabled={!!busy} onClick={() => archive(i)}>Archive</button>}{isAdmin && !i.released && <button className="btn sm danger" disabled={!!busy} onClick={() => del(i)}>Delete</button>}</span></td></tr>); })}
+            <td style={{ textAlign: 'right' }}><span className="row" style={{ justifyContent: 'flex-end', gap: 8 }}><a className="btn sm s" href={'#/manage/' + i.id}>{st === 'closed' ? 'Release checklist' : 'Open'}</a>{isAdmin && <button className="btn sm" disabled={!!busy} onClick={() => archive(i)}>Archive</button>}{isAdmin && <button className="btn sm danger" disabled={!!busy} onClick={() => del(i)}>Delete</button>}</span></td></tr>); })}
       </tbody></table></div></div>}
       {tab === 'archived' && isAdmin && <div className="card"><div className="row between center mb"><div className="lab">Archived quizzes · admins only</div><Chip>Hidden from everyone else</Chip></div><div className="scroll"><table className="tbl"><thead><tr><th>Quiz</th><th>Created by</th><th>Archived on</th><th className="num">Submitted</th><th /></tr></thead><tbody>
         {arch.loading && <tr><td colSpan="5"><Spinner /></td></tr>}
         {!arch.loading && archived.length === 0 && <tr><td colSpan="5" className="muted">Nothing archived. Archive a quiz from the Active tab to hide it everywhere.</td></tr>}
-        {archived.map((i) => <tr key={i.id}><td className="fg2">{i.title}</td><td className="muted">{ownerLabel(i)}</td><td className="muted">{i.archivedAt ? fmtDateTime(i.archivedAt) : '–'}</td><td className="num muted">{i.released ? i.submittedCount : '–'}</td><td style={{ textAlign: 'right' }}><button className="btn sm s" disabled={!!busy} onClick={() => restore(i)}>Restore</button></td></tr>)}
+        {archived.map((i) => <tr key={i.id}><td className="fg2">{i.title}</td><td className="muted">{ownerLabel(i)}</td><td className="muted">{i.archivedAt ? fmtDateTime(i.archivedAt) : '–'}</td><td className="num muted">{i.released ? i.submittedCount : '–'}</td><td style={{ textAlign: 'right' }}><span className="row" style={{ justifyContent: 'flex-end', gap: 8 }}><button className="btn sm s" disabled={!!busy} onClick={() => restore(i)}>Restore</button><button className="btn sm danger" disabled={!!busy} onClick={() => del(i)}>Delete</button></span></td></tr>)}
       </tbody></table></div></div>}
     </div>
   );
@@ -133,7 +155,8 @@ export function ManageQuiz({ id }) {
           {s.id === 'calc' && st === 'closed' && <div className="row" style={{ marginTop: 8 }}><button className="btn sm s" disabled={!!busy} onClick={() => run('calc', () => ops.calculate(id, user), (r) => `Scored ${r.count} participants${r.auto ? `, ${r.auto} auto-submitted` : ''}${r.unscored ? `. ${r.unscored} written answers still need scores` : ''}.`)}>{busy === 'calc' ? 'Calculating…' : o.calcAt ? 'Recalculate' : 'Calculate scores'}</button></div>}
           {s.id === 'written' && st === 'closed' && <WrittenScoring id={id} item={item} run={run} busy={busy} />}
           {s.id === 'reviewed' && st === 'closed' && <div style={{ marginTop: 8 }}><div className="row"><button className="btn sm s" onClick={() => setOpen(open === 'rev' ? '' : 'rev')}>{open === 'rev' ? 'Hide answers' : 'Review answers'}</button><button className="btn sm" onClick={() => run('rd', () => ops.markOp(id, 'reviewedAt', user, 'Marked review done'), 'Review marked as done.')}>{o.reviewedAt ? 'Marked done' : 'Mark review done'}</button></div>{open === 'rev' && <WrittenReview id={id} item={item} quiz={null} />}</div>}
-          {s.id === 'backup' && st === 'closed' && <div className="row" style={{ marginTop: 8 }}><button className="btn sm s" onClick={() => run('bk', async () => { download(`${item.title.replace(/[^\w]+/g, '-')}-responses.csv`, await ops.backupCsv(id)); await ops.markOp(id, 'backupAt', user, 'Downloaded response backup'); }, 'Backup downloaded.')}>Download backup CSV</button>{gas && <button className="btn sm" onClick={() => run('sh', async () => { await ops.queueOutbox('sheetBackup', { quizId: id, title: item.title }, user); await ops.markOp(id, 'backupAt', user, 'Queued Google Sheets backup'); }, 'Backup queued for Google Sheets.')}>Send to Google Sheet</button>}</div>}
+          {s.id === 'backup' && st === 'closed' && <div className="row" style={{ marginTop: 8 }}><button className="btn sm s" onClick={() => run('bk', async () => { download(`${item.title.replace(/[^\w]+/g, '-')}-responses.csv`, await ops.backupCsv(id)); await ops.markOp(id, 'backupAt', user, 'Downloaded response backup'); }, 'Backup downloaded.')}>Download backup CSV</button>{gas && <button className="btn sm s" onClick={() => run('sh', async () => { await ops.queueOutbox('sheetBackup', { quizId: id, title: item.title }, user); await ops.markOp(id, 'backupAt', user, 'Queued Google Sheets backup'); }, 'Backup queued — it will land in your Drive backup folder shortly.')}>Backup to Drive</button>}</div>}
+          {s.id === 'backup' && st === 'closed' && !gas && <div className="muted small" style={{ marginTop: 6 }}>Turn on the Apps Script helper (Admin settings → Integrations) to also back up straight to a Drive folder.</div>}
           {s.id === 'announce' && st === 'closed' && <div style={{ marginTop: 8 }}><div className="box2" style={{ whiteSpace: 'pre-wrap' }}>{msg}</div><div className="row"><button className="btn sm" onClick={() => copy(msg, toast)}>Copy Chat message</button><a className="btn sm" target="_blank" rel="noreferrer" href={`https://mail.google.com/mail/?view=cm&fs=1&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(msg)}`}>Open email draft in Gmail</a><button className="btn sm s" onClick={() => run('an', () => ops.markOp(id, 'announceAt', user, 'Marked announcement ready'), 'Announcement marked ready.')}>{o.announceAt ? 'Marked ready' : 'Mark ready'}</button></div></div>}
         </div></div>)}
         {st === 'closed' && cl.ready && <div style={{ marginTop: 14 }}><Bolt moment="checklistDone" /></div>}
@@ -149,13 +172,23 @@ export function ManageQuiz({ id }) {
 
       {item.allowReviewRequests && <div className="card mt"><div className="h3" style={{ marginBottom: 8 }}>Review requests</div>{reviews.loading ? <Spinner /> : (reviews.data || []).length === 0 ? <div className="muted">No requests yet.</div> : reviews.data.map((r) => <div key={r.id} className="box2" style={{ whiteSpace: 'normal' }}><div className="row between"><b style={{ fontWeight: 500 }}>{r.email} · {r.qid}</b><span className="row center"><Chip tone={r.status === 'open' ? 'warn' : 'ok'}>{r.status}</Chip>{r.status === 'open' && can && <button className="btn sm" onClick={async () => { await ops.resolveReview(r, 'done', user); toast('Request closed.'); reviews.reload(); }}>Mark done</button>}</span></div><div className="fg2" style={{ marginTop: 6 }}>{r.note}</div></div>)}</div>}
 
-      <div className="card mt"><div className="h3" style={{ marginBottom: 8 }}>Who can edit</div><div className="fg2">All creators and admins can edit every quiz. Only admins can archive, restore or delete one.</div></div>
+      <div className="card mt"><div className="h3" style={{ marginBottom: 8 }}>Who can edit</div>
+        <div className="fg2">Admins and {ownerLabel(item)} (the owner) can edit this quiz.{can && item.editors && item.editors.length > 0 ? ' Also shared with:' : ''}</div>
+        {can && item.editors && item.editors.length > 0 && <div className="row" style={{ marginTop: 10, gap: 8 }}>{item.editors.map((e) => <span key={e} className="chip teal" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{e}<button aria-label={`Remove ${e}'s access`} style={{ background: 'none', border: 0, color: 'inherit', cursor: 'pointer', padding: 0 }} onClick={async () => { try { await ops.setEditors(id, item.editors.filter((x) => x !== e), user, item.title); toast('Access removed.'); reload(); } catch (err) { toast('That didn\'t work.', 'err'); } }}>×</button></span>)}</div>}
+        {can && <AccessRequests id={id} item={item} user={user} toast={toast} />}
+        <div className="muted small mt">Everyone else can only see this quiz in Manage quizzes, not edit it — they can ask for access from its Edit page.</div>
+      </div>
 
       <div className="card mt"><div className="h3" style={{ marginBottom: 8 }}>Recent changes</div>{log.loading ? <Spinner /> : (log.data || []).filter((l) => l.detail.includes(item.title)).slice(0, 8).map((l) => <div key={l.id} className="row between" style={{ padding: '8px 0', borderTop: '1px solid var(--border)' }}><span>{l.action}<span className="muted small"> · {l.by}</span><div className="muted small">{l.detail}</div></span><span className="muted small">{fmtDateTime(l.at)}</span></div>)}{!log.loading && !(log.data || []).some((l) => l.detail.includes(item.title)) && <div className="muted">Nothing logged for this quiz yet.</div>}</div>
 
       {role === 'admin' && <div className="card mt warn"><div className="lab" style={{ color: 'var(--warn)', marginBottom: 8 }}>Admin only</div><div className="fg2 mb">Archiving hides this quiz from the Quiz library and leaderboards and removes it from everyone's points, streaks and averages. You can restore it later. Nothing is deleted.</div>
         <div className="row"><button className="btn sm" disabled={!!busy} onClick={async () => { if (await ask({ title: 'Archive this quiz?', body: 'It leaves the Quiz library and leaderboards, and stops counting towards points, streaks and averages. Only admins can still see it, and you can restore it any time.', ok: 'Archive quiz' })) run('arch', async () => { await ops.setArchived(id, true, user, item.title); location.hash = '#/manage'; }, 'Quiz archived.'); }}>Archive quiz</button>
-          {!item.released && <button className="btn sm danger" disabled={!!busy} onClick={async () => { if (await ask({ title: 'Delete this quiz?', body: 'This can\'t be undone. A quiz that anyone has answered can\'t be deleted. Archive it instead.', ok: 'Delete quiz', danger: true })) run('del', async () => { await ops.deleteQuiz(id, user, item.title); location.hash = '#/manage'; }, 'Quiz deleted.'); }}>Delete quiz</button>}</div></div>}
+          <button className="btn sm danger" disabled={!!busy} onClick={async () => {
+            const typed = await ask({ title: 'Delete this quiz?', body: `This permanently deletes "${item.title}" and every response, score and leaderboard entry for it — it disappears from each participant's own history too. This can't be undone. Archive it instead if you want to keep that history.\n\nType the quiz's exact name to confirm.`, input: { label: 'Quiz name', placeholder: item.title, required: true }, ok: 'Delete quiz', danger: true });
+            if (typed === null) return;
+            if (typed.trim() !== item.title.trim()) { toast('That didn\'t match the quiz name exactly. Nothing was deleted.', 'err'); return; }
+            run('del', async () => { await ops.deleteQuiz(id, user, item.title); location.hash = '#/manage'; }, 'Quiz deleted.');
+          }}>Delete quiz</button></div></div>}
     </div>
   );
 }

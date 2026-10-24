@@ -120,9 +120,13 @@ export function questionErrors(q) {
   if (q.type !== 'rating' && !(Number(q.points) > 0)) e.push('points must be more than 0.');
   return e;
 }
-export function validate(a) {
+// `otherTitles` (optional): [{id, title}] for every other quiz, so a quiz can be blocked from publishing
+// under a name that's already in use elsewhere — this only matters at publish time, not while drafting,
+// so two drafts can share a placeholder title until one of them actually needs to go live.
+export function validate(a, otherTitles = []) {
   const e = [];
   if (!a.title.trim()) e.push('Give the quiz a name.');
+  else { const norm = a.title.trim().toLowerCase(); if (otherTitles.some((t) => t.id !== a.id && t.title.trim().toLowerCase() === norm)) e.push('Another quiz already uses this name. Choose a different one.'); }
   if (!a.opens || !a.closes) e.push('Set when the quiz opens and closes.');
   else if (a.closes <= a.opens) e.push('The close time must be after the open time.');
   if (a.keyAt && a.closes && a.keyAt < a.closes) e.push('The answer key release time should be after the quiz closes.');

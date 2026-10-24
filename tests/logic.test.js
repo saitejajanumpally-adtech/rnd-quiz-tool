@@ -92,6 +92,14 @@ describe('quiz model', () => {
     expect(questionErrors(q)).toContain('remove the duplicate option text.');
     expect(questionErrors({ ...q, options: ['A', 'B', 'C'] })).not.toContain('remove the duplicate option text.');
   });
+  it('blocks publishing under a title another quiz already uses, case- and whitespace-insensitively, but allows it while otherTitles is not supplied (drafting)', () => {
+    const a = sampleAuthoring(); a.title = ' Sample ';
+    const others = [{ id: 'other-id', title: 'sample' }];
+    expect(validate(a)).toEqual([]); // no otherTitles passed: unaffected, matches today's draft-time behavior
+    expect(validate(a, others)).toContain('Another quiz already uses this name. Choose a different one.');
+    expect(validate(a, [{ id: a.id, title: 'Sample' }])).toEqual([]); // matching itself doesn't count
+    expect(validate(a, [{ id: 'other-id', title: 'Something else' }])).toEqual([]);
+  });
   it('a new quiz has no personal time limit by default, and it round-trips through toDocs/fromDocs', () => {
     const a = sampleAuthoring(); expect(a.timeLimitMin).toBe(0);
     a.timeLimitMin = 30; const { quiz, key } = toDocs(a); expect(quiz.timeLimitMin).toBe(30);

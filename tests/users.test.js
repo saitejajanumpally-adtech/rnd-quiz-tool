@@ -84,15 +84,33 @@ describe('quiz archive and delete', () => {
     expect(await store.get('quizzes/qd')).toBeNull();
     expect((await ops.loadIndex()).qd).toBeUndefined();
   });
-  it('delete is refused for a released quiz', async () => {
-    await makeQuiz('qr', { released: true });
-    await expect(ops.deleteQuiz('qr', admin, 'Quiz qr')).rejects.toThrow(/Archive it instead/);
-    expect(await store.get('quizzes/qr')).not.toBeNull();
+  it('admin can delete a released quiz with responses too, cascading to every response, result and history entry', async () => {
+    await makeQuiz('qr', { released: true, responded: true });
+    await store.set('myResults/qr_p1', { uid: 'p1', quizId: 'qr', total: 2, max: 2 });
+    await store.set('resultsPublic/qr', { top: [], max: 2 });
+    await store.set('resultsFull/qr', { rows: [] });
+    await store.set('stats/p1', { history: { qr: { score: 2, max: 2, opens: Date.now(), title: 'Quiz qr' }, other: { score: 1, max: 2 } } }, true);
+    await ops.deleteQuiz('qr', admin, 'Quiz qr');
+    expect(await store.get('quizzes/qr')).toBeNull();
+    expect(await store.get('quizKeys/qr')).toBeNull();
+    expect(await store.get('responses/qr_p1')).toBeNull();
+    expect(await store.get('myResults/qr_p1')).toBeNull();
+    expect(await store.get('resultsPublic/qr')).toBeNull();
+    expect(await store.get('resultsFull/qr')).toBeNull();
+    expect((await ops.loadIndex()).qr).toBeUndefined();
+    const stats = await store.get('stats/p1');
+    expect('qr' in stats.history).toBe(false); // gone from their personal history and, so, the leaderboard
+    expect('other' in stats.history).toBe(true); // an unrelated round's history is untouched
   });
-  it('delete is refused when anyone has submitted, even before release', async () => {
-    await makeQuiz('qs', { responded: true });
-    await expect(ops.deleteQuiz('qs', admin, 'Quiz qs')).rejects.toThrow(/Archive it instead/);
-    expect(await store.get('quizzes/qs')).not.toBeNull();
+  it('deleting an archived quiz removes it from the archived list too, and frees up its name', async () => {
+    await makeQuiz('qarch', { responded: true });
+    await ops.setArchived('qarch', true, admin, 'Quiz qarch');
+    await ops.deleteQuiz('qarch', admin, 'Quiz qarch');
+    expect((await ops.loadArchivedIndex()).qarch).toBeUndefined();
+    expect(await store.get('responses/qarch_p1')).toBeNull();
+    // the freed-up name no longer blocks a new quiz from publishing under it (see quizModel.validate's otherTitles check)
+    const otherTitles = Object.values(await ops.loadIndex()).map((i) => ({ id: i.id, title: i.title }));
+    expect(otherTitles.some((t) => t.title === 'Quiz qarch')).toBe(false);
   });
 });
 

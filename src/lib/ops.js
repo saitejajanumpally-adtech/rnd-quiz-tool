@@ -13,8 +13,9 @@ export const ROLES = ['participant', 'lead', 'creator', 'admin'];
 export const ROLE_LABEL = { participant: 'Participant', lead: 'Lead', creator: 'Creator', admin: 'Admin' };
 export const isStaff = (role) => role === 'admin' || role === 'creator';
 export const isLeadPlus = (role) => role !== 'participant';
-// Every creator can edit every quiz (agreed). Only admins archive, restore or delete.
-export const canEditQuiz = (role) => role === 'admin' || role === 'creator';
+// Every creator can SEE every quiz, but can only EDIT one they own or were given access to (quiz.editors).
+// Admins can edit anything. Only admins archive, restore or delete.
+export const canEditQuiz = (role, email, quiz) => role === 'admin' || (role === 'creator' && !!quiz && (quiz.ownerEmail === email || (quiz.editors || []).includes(email)));
 const lc = (s) => String(s || '').trim().toLowerCase();
 
 export async function getRole(user) {
@@ -66,15 +67,27 @@ export async function setArchived(id, on, user, title) {
   }
   await log(user, on ? 'Archived quiz' : 'Restored quiz', title);
 }
-// Admin-only delete. Refused once results are released or anyone has submitted, because that data cannot be recovered.
+// Admin-only. Unlike Archive, this is permanent and cascades: every response, result and leaderboard entry
+// for this quiz is removed, and it disappears from each participant's own history — so a deleted quiz's
+// name is free to reuse. Use Archive instead for anything whose history should actually be kept.
 export async function deleteQuiz(id, user, title) {
-  const key = await store.get('quizKeys/' + id);
-  if (key && key.released) throw new Error('This quiz has released results. Archive it instead.');
-  const subs = await store.count('responses', { where: [['quizId', '==', id]] });
-  if (subs > 0) throw new Error(`${subs} people have responses to this quiz. Archive it instead.`);
-  await store.del('quizzes/' + id); await store.del('quizKeys/' + id);
-  const items = await loadIndex(); delete items[id]; await store.set('quizIndex/main', { items }, false);
-  await log(user, 'Deleted quiz', title);
+  const responses = await store.list('responses', { where: [['quizId', '==', id]] });
+  const quiz = await store.get('quizzes/' + id).catch(() => null);
+  const textQids = quiz ? allQuestions(quiz).filter((q) => q.type === 'text').map((q) => q.id) : [];
+  const statsList = await Promise.all(responses.map((r) => store.get('stats/' + r.uid).catch(() => null)));
+  const batchOps = [];
+  responses.forEach((r, i) => {
+    batchOps.push({ type: 'del', path: `responses/${id}_${r.uid}` });
+    batchOps.push({ type: 'del', path: `myResults/${id}_${r.uid}` });
+    if (statsList[i] && statsList[i].history && id in statsList[i].history) batchOps.push({ type: 'update', path: `stats/${r.uid}`, data: { [`history.${id}`]: DELETE_FIELD } });
+  });
+  textQids.forEach((qid) => batchOps.push({ type: 'del', path: `writtenScores/${id}_${qid}` }));
+  batchOps.push({ type: 'del', path: `resultsPublic/${id}` }, { type: 'del', path: `resultsFull/${id}` }, { type: 'del', path: `quizzes/${id}` }, { type: 'del', path: `quizKeys/${id}` });
+  await store.batch(batchOps);
+  const main = await loadIndex(); const arch = await loadArchivedIndex().catch(() => ({}));
+  if (id in main) { const rest = { ...main }; delete rest[id]; await store.set('quizIndex/main', { items: rest }, false); }
+  if (id in arch) { const rest = { ...arch }; delete rest[id]; await store.set('quizIndex/archived', { items: rest }, false); }
+  await log(user, 'Deleted quiz, including every response, result and history entry', `${title} (${responses.length} participants affected)`);
 }
 export async function loadSettings() {
   const s = (await store.get('settings/app')) || {};

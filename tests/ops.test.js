@@ -15,13 +15,32 @@ describe('end to end quiz lifecycle on the demo backend', () => {
     expect(await ops.getRole(p1)).toBe('participant');
     await ops.setRole('New.Lead@databeat.io', 'lead', admin); expect(await ops.getRole({ email: 'new.lead@databeat.io' })).toBe('lead');
     await ops.setRole('new.lead@databeat.io', 'participant', admin); expect(await ops.getRole({ email: 'new.lead@databeat.io' })).toBe('participant');
-    expect(ops.canEditQuiz('creator', creator.email, { ownerEmail: 'x', editors: [creator.email] })).toBe(true);
-    expect(ops.canEditQuiz('creator', creator.email, { ownerEmail: 'x', editors: [] })).toBe(true); // every creator can edit every quiz
+    expect(ops.canEditQuiz('creator', creator.email, { ownerEmail: creator.email, editors: [] })).toBe(true); // owns it
+    expect(ops.canEditQuiz('creator', creator.email, { ownerEmail: 'x', editors: [creator.email] })).toBe(true); // granted access
+    expect(ops.canEditQuiz('creator', creator.email, { ownerEmail: 'x', editors: [] })).toBe(false); // neither owns it nor was granted access
+    expect(ops.canEditQuiz('admin', admin.email, { ownerEmail: 'x', editors: [] })).toBe(true); // admins can edit anything
     expect(ops.canEditQuiz('participant', p1.email, { ownerEmail: 'x', editors: [] })).toBe(false);
     expect(ops.canEditQuiz('lead', p1.email, { ownerEmail: 'x', editors: [] })).toBe(false);
     const plan = ops.planBulkRoles([{ email: 'a@databeat.io', role: 'lead' }, { email: 'b@gmail.com', role: 'lead' }, { email: 'c@databeat.io', role: 'boss' }, { email: 'a@databeat.io', role: 'lead' }], 'admin');
     expect(plan.ok.length).toBe(1); expect(plan.errors.length).toBe(3);
     expect(ops.planBulkRoles([{ email: 'a@databeat.io', role: 'admin' }], 'creator').errors[0]).toMatch(/creators can only/);
+  });
+  it('a creator who does not own a quiz can request edit access, and the owner granting it actually unlocks editing', async () => {
+    const a = newQuiz({ opens: Date.now() - 1000, closes: Date.now() + 5000 }, admin.email); a.title = 'Owned by admin';
+    await ops.saveQuiz(a, admin, { publish: true });
+    const item = (await ops.loadIndex())[a.id];
+    expect(ops.canEditQuiz('creator', creator.email, item)).toBe(false); // Charan doesn't own it and wasn't granted access
+    await ops.requestAccess(a.id, a.title, creator);
+    const pending = await ops.listAccessRequests(); const req = pending.find((r) => r.quizId === a.id && r.email === creator.email);
+    expect(req).toBeTruthy();
+    await ops.resolveAccess(req, true, { [a.id]: item }, admin);
+    const afterGrant = (await ops.loadIndex())[a.id];
+    expect(afterGrant.editors).toContain(creator.email);
+    expect(ops.canEditQuiz('creator', creator.email, afterGrant)).toBe(true); // now unlocked
+    // removing access (same mechanism Manage quizzes' "×" button uses) locks it again
+    await ops.setEditors(a.id, [], admin, a.title);
+    const afterRemove = (await ops.loadIndex())[a.id];
+    expect(ops.canEditQuiz('creator', creator.email, afterRemove)).toBe(false);
   });
   it('startResponse records when a timed quiz was opened, before any answer exists, without clobbering later answers', async () => {
     const now = Date.now();

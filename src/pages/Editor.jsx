@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp, go } from '../ctx.jsx';
 import * as ops from '../lib/ops.js';
-import { newQuiz, newQuestion, validate, questionErrors, TYPES, uid, quizStatus, allQuestions, maxScore } from '../lib/quizModel.js';
+import { newQuiz, newQuestion, validate, questionErrors, TYPES, uid, quizStatus, allQuestions, maxScore, ownerLabel } from '../lib/quizModel.js';
 import { suggestSchedule, toInputValue, fromInputValue, fmtDateTime } from '../lib/time.js';
 import { Spinner, ErrorBox, useAsync, Switch, Icon } from '../components/ui.jsx';
 import { Rich } from '../components/Rich.jsx';
@@ -190,9 +190,11 @@ export default function Editor({ id }) {
   // defaults from the moment a quiz is created, so "has valid data" alone would tick it prematurely.
   useEffect(() => { setVisited((v) => (v.has(step) ? v : new Set(v).add(step))); }, [step]);
   if (error) return <div className="mt"><ErrorBox error={error} /></div>; if (loading || !a) return <Spinner />;
-  const item = index[a.id]; const st = item ? quizStatus(item, now) : 'draft'; const can = isNew || ops.canEditQuiz(role);
+  const item = index[a.id]; const st = item ? quizStatus(item, now) : 'draft'; const can = isNew || ops.canEditQuiz(role, user.email, item);
   const questionsLocked = !!item && item.published && now >= item.opens;
-  if (!can) return <div className="card mt"><div className="h3" style={{ marginBottom: 6 }}>You can't edit this quiz</div><div className="fg2">Only creators and admins can edit quizzes. <a href="#/manage">Back to Manage quizzes</a></div></div>;
+  if (!can) return <div className="card mt"><div className="h3" style={{ marginBottom: 6 }}>You can't edit this quiz</div><div className="fg2 mb">Only its owner, admins, and people it's been shared with can edit it.{item ? ` ${ownerLabel(item)} owns this one.` : ''}</div>
+    {role === 'creator' && <button className="btn sm s" onClick={async () => { try { await ops.requestAccess(a.id, a.title, user); toast('Request sent. The owner or an admin can grant you access from Manage quizzes.'); } catch (e) { toast('Couldn\'t send that request.', 'err'); } }}>Request edit access</button>}
+    <div className="mt"><a href="#/manage">Back to Manage quizzes</a></div></div>;
   const upd = (patch) => { setA((x) => ({ ...x, ...patch })); setDirty(true); };
   const updSec = (si, patch) => upd({ sections: a.sections.map((s, i) => (i === si ? { ...s, ...patch } : s)) });
   const updQ = (si, qi, q) => updSec(si, { questions: a.sections[si].questions.map((x, i) => (i === qi ? q : x)) });
@@ -207,7 +209,8 @@ export default function Editor({ id }) {
     setStep(target);
   };
   const save = async (publish, opts = {}) => {
-    const e = publish || step === 4 ? validate(a) : []; setErrs(e);
+    const otherTitles = Object.values(index).filter((i) => i.id !== a.id).map((i) => ({ id: i.id, title: i.title }));
+    const e = publish || step === 4 ? validate(a, otherTitles) : []; setErrs(e);
     if (publish && e.length) { toast('Fix the highlighted problems first.', 'err'); setStep(4); return; }
     if (!a.title.trim()) { toast('Give the quiz a name before saving.', 'err'); setStep(1); return; }
     if (publish && !(await ask({ title: 'Publish this quiz?', body: `It opens ${fmtDateTime(a.opens)} and closes ${fmtDateTime(a.closes)}. Participants can see it from the opening time.`, ok: 'Publish' }))) return;

@@ -42,8 +42,12 @@ service cloud.firestore {
     }
     // Admins see everything. Creators see everything except archived quizzes.
     function staffSees(q) { return isAdmin() || (isStaff() && !isArchived(q)); }
-    // Every creator can edit every quiz (agreed). Only admins can archive, restore or delete.
-    function canEditQuiz(q) { return isAdmin() || isCreator(); }
+    // A creator can edit a quiz only if they own it or were given access (quizzes.editors). Admins can edit
+    // anything, and only admins can archive, restore or delete.
+    function canEditQuiz(q) {
+      let quiz = get(/databases/$(database)/documents/quizzes/$(q)).data;
+      return isAdmin() || (isCreator() && (quiz.ownerEmail == me() || me() in quiz.get('editors', [])));
+    }
     function archiveUnchanged() {
       return request.resource.data.get('archived', false) == resource.data.get('archived', false);
     }
@@ -91,11 +95,14 @@ service cloud.firestore {
       // the app never lists this collection; only admins may
       allow list: if isAdmin();
       allow create: if isAdmin() || (isCreator() && request.resource.data.ownerEmail == me());
-      allow update: if isAdmin() || (isCreator() && archiveUnchanged());
-      // admin-only delete, and only for quizzes that were never released (the app also refuses if anyone has responded)
-      allow delete: if isAdmin()
-        && !(exists(/databases/$(database)/documents/quizKeys/$(id))
-             && get(/databases/$(database)/documents/quizKeys/$(id)).data.released == true);
+      // an editor (not the owner) can change the quiz, but only the owner or an admin can change who else has access
+      allow update: if isAdmin()
+        || (isCreator() && archiveUnchanged()
+            && (resource.data.ownerEmail == me() || me() in resource.data.get('editors', []))
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['editors']) || resource.data.ownerEmail == me()));
+      // admin-only, and permanent even for a released/answered quiz — the app cascades the delete to every
+      // response, result and history entry for it client-side (see ops.deleteQuiz)
+      allow delete: if isAdmin();
     }
 
     // the answer key (correct answers, rubrics, explanations): staff, or everyone after release
