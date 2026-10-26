@@ -4,6 +4,7 @@ import { store } from '../lib/store.js';
 import { quizStatus, STATUS_LABEL, ownerLabel } from '../lib/quizModel.js';
 import * as ops from '../lib/ops.js';
 import { parseWrittenUpload, SCORING_COLUMNS, CLAUDE_MESSAGE } from '../lib/written.js';
+import { buildImportTemplate, parseImportUpload } from '../lib/importAnswers.js';
 import { Bolt } from '../components/mascots.jsx';
 import { download } from '../lib/csv.js';
 import { fmtDateTime, fmtRange, toInputValue, fromInputValue, rangeStart } from '../lib/time.js';
@@ -139,6 +140,39 @@ function ReviewRequests({ id, item, user, toast, ask, can }) {
   );
 }
 
+// Admin-only: backfill a quiz that happened before it was run in this tool (or outside it). Writes real
+// responses so Calculate scores, written scoring and release all work exactly as for a live quiz.
+function ImportAnswers({ id, item, quiz, user, toast, run }) {
+  const [up, setUp] = useState(null);
+  const pend = useAsync(() => ops.listPendingImports(id), [id]);
+  if (!quiz) return null;
+  const onFile = async (f) => {
+    if (!f) return;
+    const { rows, errors } = parseImportUpload(await f.text(), quiz);
+    setUp({ rows, errors, name: f.name });
+  };
+  const doImport = () => run('import', () => ops.importPastResponses(id, up.rows, user, item.title), (r) => {
+    setUp(null); pend.reload();
+    return `Imported ${r.imported} ${r.imported === 1 ? 'participant' : 'participants'} now.${r.pending.length ? ` ${r.pending.length} haven't signed into the tool yet — their answers are held and will apply automatically the moment they do (checked every 5 minutes): ${r.pending.join(', ')}.` : ''}`;
+  });
+  return (
+    <div className="card mt"><div className="h3" style={{ marginBottom: 4 }}>Import participant answers</div>
+      <div className="fg2" style={{ marginBottom: 8 }}>For a quiz that happened before it was run in this tool. Download the template, fill in what each person actually answered, then upload it — scores, the leaderboard and everyone's own history all work exactly as if they'd taken it live. Anyone who hasn't signed into the tool yet is held as a pending import and applies itself automatically the moment they do — no need to re-upload.</div>
+      <div className="row" style={{ gap: 8 }}>
+        <button className="btn sm s" onClick={() => download(`${item.title.replace(/[^\w]+/g, '-')}-import-template.csv`, buildImportTemplate(quiz))}>Download template</button>
+        <label className="btn sm" style={{ cursor: 'pointer' }}>Upload filled-in file<input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => { onFile(e.target.files[0]); e.target.value = ''; }} /></label>
+      </div>
+      {up && <div className="box2" style={{ marginTop: 10, whiteSpace: 'normal' }}>
+        <b style={{ fontWeight: 500 }}>{up.name}</b>: {up.rows.length} {up.rows.length === 1 ? 'row is' : 'rows are'} ready to import.{up.errors.length ? ` ${up.errors.length} ${up.errors.length === 1 ? 'row has a problem' : 'rows have a problem'} and were left out — fix and re-upload just those.` : ''}
+        {up.errors.slice(0, 10).map((e, i) => <div key={i} style={{ color: 'var(--danger)' }}>{e}</div>)}
+        {up.errors.length > 10 && <div className="muted">…and {up.errors.length - 10} more.</div>}
+        <div className="row" style={{ marginTop: 8 }}><button className="btn sm p" disabled={!up.rows.length} onClick={doImport}>Import {up.rows.length || ''} {up.rows.length === 1 ? 'participant' : 'participants'}</button><button className="btn sm" onClick={() => setUp(null)}>Discard</button></div>
+      </div>}
+      {!pend.loading && (pend.data || []).length > 0 && <div className="muted small" style={{ marginTop: 10 }}>Still waiting for a sign-in: {pend.data.map((p) => p.email).join(', ')}.</div>}
+    </div>
+  );
+}
+
 function WrittenReview({ id, item, quiz }) {
   const { user, toast, ask } = useApp(); const [f, setF] = useState('flag'); const [page, setPage] = useState(0);
   const { loading, data, error, reload } = useAsync(() => ops.loadWrittenReview(id), [id]);
@@ -193,6 +227,8 @@ export function ManageQuiz({ id }) {
         </div>}
         {st === 'live' && <div className="row" style={{ marginTop: 14 }}><button className="btn sm" onClick={() => copy(`Reminder: ${item.title} closes ${fmtDateTime(item.closes)}. Take it here: ${vars.link}`, toast)}>Copy reminder for Chat</button>{gas && <button className="btn sm" onClick={() => run('rem', () => ops.queueOutbox('chat', { text: `Reminder: ${item.title} closes ${fmtDateTime(item.closes)}. Take it here: ${vars.link}` }, user), 'Reminder queued for Google Chat.')}>Send reminder to Chat</button>}</div>}
       </div>}
+
+      {(st === 'closed' || st === 'released') && role === 'admin' && <ImportAnswers id={id} item={item} quiz={quizDoc.data} user={user} toast={toast} run={run} />}
 
       {(st === 'closed' || st === 'released') && can && <div className={'card mt ' + (st === 'closed' ? 'warn' : '')}>
         <div className="h3" style={{ marginBottom: 4 }}>Release checklist</div><div className="fg2" style={{ marginBottom: 8 }}>Everything must be done before results and the answer key reach participants.</div>

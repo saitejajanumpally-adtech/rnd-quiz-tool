@@ -29,6 +29,22 @@ export async function ensureUser(user) {
   const base = { name: user.name, email: user.email, lastSeen: now, deleted: false, deletedAt: null };
   await store.set('users/' + user.uid, prev ? base : { ...base, firstSeen: now }, true);
   if (prev && prev.deleted) { try { await store.del('profileStatus/' + user.uid); } catch (e) { /* the marker is only cosmetic */ } }
+  // Finishes any backfill import that was waiting on this person to have an account. On the live site this
+  // is a best-effort nicety (the rules only let an admin write an imported response, so this quietly no-ops
+  // there) — the Apps Script helper is what actually finishes it, within 5 minutes, either way.
+  try { await applyPendingImports(user); } catch (e) { /* the Apps Script helper will pick this up instead */ }
+}
+// Finishes any pending import(s) left for this person's email (see importPastResponses). Returns how many.
+export async function applyPendingImports(user) {
+  const pend = await store.list('pendingImports', { where: [['email', '==', user.email]] });
+  if (!pend.length) return 0;
+  const now = Date.now(); const batchOps = [];
+  pend.forEach((p) => {
+    batchOps.push({ type: 'set', path: `responses/${p.quizId}_${user.uid}`, data: { quizId: p.quizId, uid: user.uid, email: p.email, name: user.name || p.email, answers: p.answers || {}, submitted: true, submittedAt: now, imported: true, importedBy: p.importedBy || '', importedAt: p.importedAt || now } });
+    batchOps.push({ type: 'del', path: `pendingImports/${p.id}` });
+  });
+  await store.batch(batchOps);
+  return pend.length;
 }
 // "Remove my profile" removes only the sign-in profile. Scores and history stay, shown as "Profile removed".
 // profileStatus/<uid> is a tiny public marker so leaderboards can grey the name without reading anyone's profile.
@@ -137,6 +153,27 @@ export async function liveCounts(quizId) {
   const [submitted, started] = await Promise.all([store.count('responses', { where: [['quizId', '==', quizId], ['submitted', '==', true]] }), store.count('responses', { where: [['quizId', '==', quizId]] })]);
   return { submitted, started };
 }
+
+// Backfills a quiz that happened before it was run in this tool (or outside it). `rows` is
+// [{email, answers}] from parseImportUpload. Writes real responses so Calculate scores, written
+// scoring and release all work exactly as they do for a quiz actually run live. Someone who hasn't
+// signed into the tool yet has no account to attach a score to yet — their answers are held as a
+// pending import instead, and applyPendingImports() (run on their first sign-in, and by the Apps
+// Script helper every 5 minutes as a backstop) finishes the job automatically once they do.
+export async function importPastResponses(id, rows, user, title) {
+  const found = await Promise.all(rows.map((r) => store.list('users', { where: [['email', '==', r.email]] })));
+  const pending = []; const batchOps = []; const now = Date.now();
+  rows.forEach((r, i) => {
+    const u = found[i][0];
+    if (!u) { pending.push(r.email); batchOps.push({ type: 'set', path: `pendingImports/${id}_${r.email}`, data: { quizId: id, email: r.email, answers: r.answers, title, importedBy: user.email, importedAt: now } }); return; }
+    batchOps.push({ type: 'set', path: `responses/${id}_${u.id}`, data: { quizId: id, uid: u.id, email: r.email, name: u.name || r.email, answers: r.answers, submitted: true, submittedAt: now, imported: true, importedBy: user.email, importedAt: now } });
+  });
+  if (batchOps.length) await store.batch(batchOps);
+  const applied = rows.length - pending.length;
+  await log(user, 'Imported past quiz answers', `${title}: ${applied} applied now, ${pending.length ? `${pending.length} waiting for sign-in` : 'none waiting'}`);
+  return { imported: applied, pending };
+}
+export async function listPendingImports(quizId) { return store.list('pendingImports', { where: [['quizId', '==', quizId]] }); }
 
 // ---------------- authoring
 export async function loadAuthoring(id) {

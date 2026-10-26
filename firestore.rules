@@ -121,14 +121,23 @@ service cloud.firestore {
       // Raw answers of an archived quiz can be read by admins only. Creators keep their access to active quizzes.
       allow get: if signedIn() && (rid.matches('.*_' + request.auth.uid) || staffSees(resource.data.quizId));
       allow list: if staffSees(resource.data.quizId);
-      allow create: if signedIn()
-        && request.resource.data.uid == request.auth.uid
-        && rid == request.resource.data.quizId + '_' + request.auth.uid
-        && request.resource.data.email == me()
-        && request.resource.data.submitted == false
-        && request.resource.data.keys().hasOnly(['quizId', 'uid', 'email', 'name', 'answers', 'submitted', 'startedAt', 'updatedAt'])
-        && quizOpen(request.resource.data.quizId)
-        && profileActive();
+      allow create: if (signedIn()
+            && request.resource.data.uid == request.auth.uid
+            && rid == request.resource.data.quizId + '_' + request.auth.uid
+            && request.resource.data.email == me()
+            && request.resource.data.submitted == false
+            && request.resource.data.keys().hasOnly(['quizId', 'uid', 'email', 'name', 'answers', 'submitted', 'startedAt', 'updatedAt'])
+            && quizOpen(request.resource.data.quizId)
+            && profileActive())
+        // Admin-only: backfilling a quiz that happened before the tool ran it (or outside it). Skips the
+        // quizOpen() window on purpose, since this always happens after the fact. Always tagged with who
+        // imported it and when, so it's never mistaken for something a person actually submitted live.
+        || (isAdmin()
+            && request.resource.data.imported == true
+            && request.resource.data.importedBy == me()
+            && request.resource.data.submitted == true
+            && rid == request.resource.data.quizId + '_' + request.resource.data.uid
+            && request.resource.data.keys().hasOnly(['quizId', 'uid', 'email', 'name', 'answers', 'submitted', 'submittedAt', 'imported', 'importedBy', 'importedAt']));
       // the person's own branch comes first: it is the common case and costs the fewest database reads
       allow update: if (signedIn()
             && resource.data.uid == request.auth.uid
@@ -215,6 +224,14 @@ service cloud.firestore {
     }
     match /outbox/{id} {
       allow read, create, update: if isStaff();
+    }
+    // Answers imported for someone who hasn't signed into the tool yet (see ops.importPastResponses).
+    // Finished off and deleted by the Apps Script helper once that email signs in — not by the app itself,
+    // since turning this into a real response has to happen with the Apps Script helper's own access, not
+    // through a participant's own account.
+    match /pendingImports/{id} {
+      allow read: if isStaff();
+      allow create, delete: if isAdmin();
     }
   }
 }

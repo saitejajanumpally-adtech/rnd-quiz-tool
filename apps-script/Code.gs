@@ -73,6 +73,7 @@ function patch_(docName, fields) {
   var payload = { fields: {} }; Object.keys(fields).forEach(function (k) { payload.fields[k] = toFs_(fields[k]); });
   fetch_('https://firestore.googleapis.com/v1/' + docName + '?' + mask, { method: 'patch', contentType: 'application/json', payload: JSON.stringify(payload) });
 }
+function del_(docName) { fetch_('https://firestore.googleapis.com/v1/' + docName, { method: 'delete' }); }
 
 // ---- the jobs
 function doChat_(p) {
@@ -120,6 +121,25 @@ function handle_(job) {
   throw new Error('Unknown job type: ' + job.type);
 }
 
+// Finishes a backfilled quiz import for someone who hadn't signed into the tool yet when it was imported
+// (see "Import participant answers" in Manage quizzes). The app itself can leave this doc here but can't
+// turn it into a real response — only this script's own access can, since a participant's own account
+// isn't allowed to write an imported response for themselves. Runs every 5 minutes, same as the outbox.
+function applyPendingImports_() {
+  query_('pendingImports', [], 50).forEach(function (p) {
+    try {
+      var users = query_('users', [eq_('email', p.email)], 1);
+      if (!users.length) return; // still hasn't signed in - try again next run
+      var uid = users[0]._id;
+      var docName = 'projects/' + projectId_() + '/databases/(default)/documents/responses/' + p.quizId + '_' + uid;
+      patch_(docName, { quizId: p.quizId, uid: uid, email: p.email, name: users[0].name || p.email, answers: p.answers || {}, submitted: true, submittedAt: Date.now(), imported: true, importedBy: p.importedBy || '', importedAt: p.importedAt || Date.now() });
+      del_(p._path);
+    } catch (e) {
+      // leave it in place; it'll be retried next run
+    }
+  });
+}
+
 // Runs every 5 minutes (see installTrigger).
 function processOutbox() {
   var lock = LockService.getScriptLock();
@@ -133,6 +153,7 @@ function processOutbox() {
         patch_(job._path, { status: 'error', error: String(e).slice(0, 300) });
       }
     });
+    applyPendingImports_();
   } finally { lock.releaseLock(); }
 }
 
@@ -147,6 +168,7 @@ function testEverything() {
   var report = [];
   function step(name, fn) { try { var r = fn(); report.push('OK    ' + name + (r ? ' (' + r + ')' : '')); } catch (e) { report.push('FIX   ' + name + ': ' + e.message); } }
   step('Can read the Arena database', function () { return query_('outbox', [eq_('status', 'pending')], 1).length + ' pending jobs'; });
+  step('Pending backfill imports', function () { return query_('pendingImports', [], 50).length + ' waiting for someone to sign in'; });
   step('Google Chat webhook', function () { if (!props_().getProperty('CHAT_WEBHOOK_URL')) return 'skipped, no webhook set'; doChat_({ text: 'Test message from the R&D Quiz Arena helper. You can ignore this.' }); return 'test message posted'; });
   step('Gmail drafts', function () { doEmailDraft_({ subject: 'Test draft from the R&D Quiz Arena helper', body: 'You can delete this draft.' }); return 'draft created in your Gmail'; });
   step('Google Sheets and Drive', function () { var ss = SpreadsheetApp.create('Arena helper test - safe to delete'); return ss.getUrl(); });
