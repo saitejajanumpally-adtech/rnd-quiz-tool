@@ -8,6 +8,7 @@ import { parseCsv, toCsv } from './csv.js';
 import { stripRich } from './richtext.js';
 
 const UNSUPPORTED = new Set(['order', 'match', 'rating']);
+const SCORE_SUFFIX = '_score';
 const norm = (s) => String(s || '').trim().toLowerCase();
 
 function hint(q) {
@@ -26,7 +27,8 @@ export function buildImportTemplate(quiz) {
     '# 1. One row per participant. Use the @databeat.io email they sign into the tool with — they must have signed in at least once already.',
     '# 2. Fill in every question column with what that person actually answered. Leave a cell blank if they skipped it.',
     '# 3. Do not change the header row. Keep the CSV format; wrap any text that contains commas in double quotes.',
-    ...qs.map((q) => `# ${q.id}: ${hint(q)}`)
+    ...qs.map((q) => `# ${q.id}: ${hint(q)}`),
+    ...(qs.some((q) => q.type === 'text') ? ['# 4. Optional, written answers only: if you already know someone\'s score for a written answer, add a column named "<id>_score" (e.g. "' + qs.find((q) => q.type === 'text').id + '_score") with a number from 0 to that question\'s points. Leave it out, or leave a cell blank, to score it normally afterwards instead.'] : [])
   ];
   const header = ['email', ...qs.map((q) => `${q.id}: ${stripRich(q.text).slice(0, 60)}`)];
   return instructions.join('\r\n') + '\r\n' + toCsv([header]);
@@ -69,8 +71,12 @@ export function parseImportUpload(text, quiz) {
   if (!grid.length) return { rows: [], errors: ['The file is empty. Use the downloaded template and fill in a row per participant.'] };
   const head = grid[0].map((h) => String(h).trim());
   if (norm(head[0]) !== 'email') return { rows: [], errors: [`The first column must be "email". This file has: ${head[0] || '(nothing)'}.`] };
-  const cols = head.slice(1).map((h) => String(h).split(':')[0].trim());
-  const unknown = cols.filter((id) => !byId[id]);
+  const cols = head.slice(1).map((h) => {
+    const id = String(h).split(':')[0].trim();
+    if (id.endsWith(SCORE_SUFFIX)) { const qid = id.slice(0, -SCORE_SUFFIX.length); if (byId[qid] && byId[qid].type === 'text') return { kind: 'score', id: qid }; }
+    return { kind: 'answer', id };
+  });
+  const unknown = cols.filter((c) => c.kind === 'answer' && !byId[c.id]).map((c) => c.id);
   if (unknown.length) return { rows: [], errors: [`These columns don't match a question in this quiz: ${unknown.join(', ')}. Use the downloaded template instead of editing headers.`] };
   const errors = []; const rows = []; const seen = new Set();
   grid.slice(1).forEach((cells, i) => {
@@ -79,13 +85,21 @@ export function parseImportUpload(text, quiz) {
     if (!email.includes('@')) { errors.push(`Line ${line}: "${cells[0]}" isn't an email address.`); return; }
     if (seen.has(email)) { errors.push(`Line ${line}: ${email} appears more than once.`); return; }
     seen.add(email);
-    const answers = {}; let rowOk = true;
-    cols.forEach((id, ci) => {
-      const r = parseCell(byId[id], cells[ci + 1]);
-      if (!r.ok) { errors.push(`Line ${line}, ${id}: ${r.error}`); rowOk = false; }
-      else if (r.value !== undefined) answers[id] = r.value;
+    const answers = {}; const written = {}; let rowOk = true;
+    cols.forEach((c, ci) => {
+      const raw = cells[ci + 1];
+      if (c.kind === 'score') {
+        const v = String(raw ?? '').trim(); if (!v) return;
+        const n = Number(v); const max = byId[c.id].points;
+        if (Number.isNaN(n) || n < 0 || n > max) { errors.push(`Line ${line}, ${c.id}_score: "${v}" must be a number from 0 to ${max}.`); rowOk = false; return; }
+        written[c.id] = { score: n };
+        return;
+      }
+      const r = parseCell(byId[c.id], raw);
+      if (!r.ok) { errors.push(`Line ${line}, ${c.id}: ${r.error}`); rowOk = false; }
+      else if (r.value !== undefined) answers[c.id] = r.value;
     });
-    if (rowOk) rows.push({ email, answers });
+    if (rowOk) rows.push({ email, answers, written });
   });
   return { rows, errors };
 }

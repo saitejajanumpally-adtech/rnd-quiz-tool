@@ -41,6 +41,7 @@ export async function applyPendingImports(user) {
   const now = Date.now(); const batchOps = [];
   pend.forEach((p) => {
     batchOps.push({ type: 'set', path: `responses/${p.quizId}_${user.uid}`, data: { quizId: p.quizId, uid: user.uid, email: p.email, name: user.name || p.email, answers: p.answers || {}, submitted: true, submittedAt: now, imported: true, importedBy: p.importedBy || '', importedAt: p.importedAt || now } });
+    Object.entries(p.written || {}).forEach(([qid, w]) => batchOps.push({ type: 'set', merge: true, path: `writtenScores/${p.quizId}_${qid}`, data: { scores: { [user.uid]: { score: w.score, feedback: w.feedback || '', flag: false, at: now } } } }));
     batchOps.push({ type: 'del', path: `pendingImports/${p.id}` });
   });
   await store.batch(batchOps);
@@ -164,9 +165,10 @@ export async function importPastResponses(id, rows, user, title) {
   const found = await Promise.all(rows.map((r) => store.list('users', { where: [['email', '==', r.email]] })));
   const pending = []; const batchOps = []; const now = Date.now();
   rows.forEach((r, i) => {
-    const u = found[i][0];
-    if (!u) { pending.push(r.email); batchOps.push({ type: 'set', path: `pendingImports/${id}_${r.email}`, data: { quizId: id, email: r.email, answers: r.answers, title, importedBy: user.email, importedAt: now } }); return; }
+    const u = found[i][0]; const written = r.written || {};
+    if (!u) { pending.push(r.email); batchOps.push({ type: 'set', path: `pendingImports/${id}_${r.email}`, data: { quizId: id, email: r.email, answers: r.answers, written, title, importedBy: user.email, importedAt: now } }); return; }
     batchOps.push({ type: 'set', path: `responses/${id}_${u.id}`, data: { quizId: id, uid: u.id, email: r.email, name: u.name || r.email, answers: r.answers, submitted: true, submittedAt: now, imported: true, importedBy: user.email, importedAt: now } });
+    Object.entries(written).forEach(([qid, w]) => batchOps.push({ type: 'set', merge: true, path: `writtenScores/${id}_${qid}`, data: { scores: { [u.id]: { score: w.score, feedback: w.feedback || '', flag: false, at: now } } } }));
   });
   if (batchOps.length) await store.batch(batchOps);
   const applied = rows.length - pending.length;

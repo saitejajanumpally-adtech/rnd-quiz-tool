@@ -54,6 +54,12 @@ function toFs_(x) {
   if (typeof x === 'string') return { stringValue: x };
   if (typeof x === 'number') return Number.isInteger(x) ? { integerValue: String(x) } : { doubleValue: x };
   if (typeof x === 'boolean') return { booleanValue: x };
+  if (Array.isArray(x)) return { arrayValue: { values: x.map(toFs_) } };
+  if (typeof x === 'object') {
+    var fields = {};
+    Object.keys(x).forEach(function (k) { fields[k] = toFs_(x[k]); });
+    return { mapValue: { fields: fields } };
+  }
   return { stringValue: String(x) };
 }
 function query_(collection, filters, limit) {
@@ -71,6 +77,15 @@ function getDoc_(path) { var d = fetch_(base_() + '/' + path); return fieldsToOb
 function patch_(docName, fields) {
   var mask = Object.keys(fields).map(function (k) { return 'updateMask.fieldPaths=' + encodeURIComponent(k); }).join('&');
   var payload = { fields: {} }; Object.keys(fields).forEach(function (k) { payload.fields[k] = toFs_(fields[k]); });
+  fetch_('https://firestore.googleapis.com/v1/' + docName + '?' + mask, { method: 'patch', contentType: 'application/json', payload: JSON.stringify(payload) });
+}
+// Sets just one key inside a map field (e.g. scores.<uid>) without touching any of that map's other keys —
+// the REST equivalent of the app's own merge:true writes. A plain patch_ on the whole map field would wipe
+// out every other person's entry in it.
+function patchMapKey_(docName, topField, key, value) {
+  var mask = 'updateMask.fieldPaths=' + encodeURIComponent(topField + '.' + key);
+  var inner = {}; inner[key] = toFs_(value);
+  var payload = { fields: {} }; payload.fields[topField] = { mapValue: { fields: inner } };
   fetch_('https://firestore.googleapis.com/v1/' + docName + '?' + mask, { method: 'patch', contentType: 'application/json', payload: JSON.stringify(payload) });
 }
 function del_(docName) { fetch_('https://firestore.googleapis.com/v1/' + docName, { method: 'delete' }); }
@@ -131,8 +146,12 @@ function applyPendingImports_() {
       var users = query_('users', [eq_('email', p.email)], 1);
       if (!users.length) return; // still hasn't signed in - try again next run
       var uid = users[0]._id;
-      var docName = 'projects/' + projectId_() + '/databases/(default)/documents/responses/' + p.quizId + '_' + uid;
-      patch_(docName, { quizId: p.quizId, uid: uid, email: p.email, name: users[0].name || p.email, answers: p.answers || {}, submitted: true, submittedAt: Date.now(), imported: true, importedBy: p.importedBy || '', importedAt: p.importedAt || Date.now() });
+      var base = 'projects/' + projectId_() + '/databases/(default)/documents/';
+      patch_(base + 'responses/' + p.quizId + '_' + uid, { quizId: p.quizId, uid: uid, email: p.email, name: users[0].name || p.email, answers: p.answers || {}, submitted: true, submittedAt: Date.now(), imported: true, importedBy: p.importedBy || '', importedAt: p.importedAt || Date.now() });
+      Object.keys(p.written || {}).forEach(function (qid) {
+        var w = p.written[qid];
+        patchMapKey_(base + 'writtenScores/' + p.quizId + '_' + qid, 'scores', uid, { score: w.score, feedback: w.feedback || '', flag: false, at: Date.now() });
+      });
       del_(p._path);
     } catch (e) {
       // leave it in place; it'll be retried next run
