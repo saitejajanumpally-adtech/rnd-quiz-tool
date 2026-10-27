@@ -231,7 +231,9 @@ service cloud.firestore {
     // through a participant's own account.
     match /pendingImports/{id} {
       allow read: if isStaff();
-      allow create, delete: if isAdmin();
+      // update: re-importing the same quiz (e.g. to add a now-known written score) overwrites an
+      // already-pending record, which Firestore treats as an update, not a create.
+      allow create, update, delete: if isAdmin();
     }
   }
 }
