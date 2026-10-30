@@ -1,4 +1,10 @@
 :root{color-scheme:dark;--bg:#0E1B22;--bg1:#142430;--bg3:#1F3845;--elev:#1A2C38;--fg:#E8EBEC;--fg2:#B8C5CC;--muted:#8A9CA5;--primary:#2DA9A2;--on-primary:#07221F;--accent:#5FC9C0;--warn:#E0A04B;--success:#3FC094;--danger:#E2745A;--info:#6FB7E0;--border:rgba(255,255,255,.07);--border2:rgba(255,255,255,.14);--teal-border:rgba(45,169,162,.3);--mint-soft:rgba(95,201,192,.12);--r:12px;--mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;--sans:Inter,'Helvetica Neue',Arial,sans-serif}
+/* ---- light theme: the Mediamint design system's own light mode. Same token names, so every rule below
+   that already reads var(--bg)/var(--fg)/etc just works — nothing else in this file knows which theme is on. ---- */
+:root[data-theme="light"]{color-scheme:light;--bg:#FBF6F0;--bg1:#FAF7EF;--bg3:#F0E9DD;--elev:#FFFFFF;--fg:#0E2733;--fg2:#2F4753;--muted:#5B6E78;--primary:#0E5E6B;--on-primary:#FFFFFF;--accent:#2DA9A2;--warn:#8F5A0A;--success:#1F7A5C;--danger:#A3432A;--info:#1F7A5C;--border:rgba(14,39,51,.09);--border2:#7F919B;--teal-border:rgba(14,94,107,.35);--mint-soft:rgba(45,169,162,.14)}
+@media (prefers-color-scheme:light){
+  :root:not([data-theme]){color-scheme:light;--bg:#FBF6F0;--bg1:#FAF7EF;--bg3:#F0E9DD;--elev:#FFFFFF;--fg:#0E2733;--fg2:#2F4753;--muted:#5B6E78;--primary:#0E5E6B;--on-primary:#FFFFFF;--accent:#2DA9A2;--warn:#8F5A0A;--success:#1F7A5C;--danger:#A3432A;--info:#1F7A5C;--border:rgba(14,39,51,.09);--border2:#7F919B;--teal-border:rgba(14,94,107,.35);--mint-soft:rgba(45,169,162,.14)}
+}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
 a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
@@ -44,6 +50,11 @@ h1,h2,h3,p{margin:0}
 .menu .head{padding:10px;display:flex;gap:10px;align-items:center}
 .menu a,.menu button{display:block;width:100%;text-align:left;padding:10px;border:0;background:none;color:var(--fg2);border-top:1px solid var(--border);border-radius:0}
 .menu a:hover,.menu button:hover{background:var(--bg1);color:var(--fg);text-decoration:none}
+/* the appearance switcher's segmented control sits inside the menu but isn't a menu row itself */
+.menu .seg{display:flex}
+.menu .seg button{width:auto;flex:1;text-align:center;padding:7px 10px;border:1px solid var(--border2);border-radius:8px;color:var(--fg2)}
+.menu .seg button.on{background:var(--mint-soft);border-color:var(--primary);color:var(--fg)}
+.menu .seg button:hover{background:var(--bg1);color:var(--fg)}
 /* type + layout */
 .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 .lab{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}

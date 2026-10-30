@@ -5,6 +5,7 @@ import { quizStatus } from './lib/quizModel.js';
 import { isStaff, ROLE_LABEL } from './lib/ops.js';
 import { CONFIG } from './config.js';
 import { Spinner, Icon } from './components/ui.jsx';
+import { getThemePref, setThemePref } from './lib/theme.js';
 import Tour from './components/Tour.jsx';
 import { Bolt, MascotPic } from './components/mascots.jsx';
 import Arena from './pages/Arena.jsx';
@@ -66,6 +67,20 @@ function SignIn() {
   );
 }
 
+function ThemeSwitch() {
+  const [pref, setPref] = useState(getThemePref());
+  const pick = (p) => { setThemePref(p); setPref(p); };
+  return (
+    <div style={{ padding: '10px 10px 4px' }}>
+      <div className="small muted" style={{ marginBottom: 6 }}>Appearance</div>
+      <div className="seg">
+        <button type="button" className={pref === 'system' ? 'on' : ''} onClick={() => pick('system')}>System</button>
+        <button type="button" className={pref === 'light' ? 'on' : ''} onClick={() => pick('light')}>Light</button>
+        <button type="button" className={pref === 'dark' ? 'on' : ''} onClick={() => pick('dark')}>Dark</button>
+      </div>
+    </div>
+  );
+}
 function NavLink({ to, children, dot, tour }) {
   const { path } = useApp(); const on = to === '/' ? path === '/' : path.startsWith(to);
   return <a href={'#' + to} data-tour={tour} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined}>{children}{dot && <span className="dot" aria-label="New" />}</a>;
@@ -98,6 +113,7 @@ function Shell({ children }) {
               <div className="menu" role="menu">
                 <div className="head"><span className="avatar">{(user.name || '?')[0]}</span><div><div>{user.name}</div><div className="small muted">{ROLE_LABEL[role]} · {user.email}</div></div></div>
                 <a role="menuitem" href="#/profile">Profile and progress</a>
+                <ThemeSwitch />
                 <button role="menuitem" onClick={() => { setOpen(false); openTour(); }}>Take the tour</button>
                 {isStaff(role) && <a role="menuitem" href="#/roles">{role === 'admin' ? 'Roles (everyone)' : 'Roles (leads and participants)'}</a>}
                 {role === 'admin' && <a role="menuitem" href="#/admin">Admin settings</a>}
