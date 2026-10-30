@@ -79,7 +79,7 @@ export function LibraryDetail({ id }) {
             {q.type !== 'text' && k && k.explanation && <div className="why"><span className="muted">Why: </span><Rich text={k.explanation} /></div>}
             {q.type === 'text' && showMine && <>
               <div className="lab" style={{ margin: '8px 0 4px' }}>Your answer</div><div className="box2">{(resp && (resp.answers || {})[q.id]) || 'No answer recorded.'}</div>
-              {r && r.feedback && <><div className="lab" style={{ marginBottom: 4 }}>Feedback on your answer</div><div className="box2" style={{ borderColor: 'rgba(224,160,75,.5)' }}>{r.feedback}</div></>}
+              {r && r.feedback && <><div className="lab" style={{ marginBottom: 4 }}>Feedback on your answer</div><div className="box2" style={{ borderColor: 'color-mix(in srgb, var(--warn) 50%, transparent)' }}>{r.feedback}</div></>}
               {item && item.allowReviewRequests && (asked.includes(q.id) ? <span className="chip teal">Review requested</span> : <button className="btn sm" onClick={() => askReview(q)}>Request review</button>)}
             </>}
           </div>);

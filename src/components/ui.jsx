@@ -119,9 +119,9 @@ export function Journey({ points, thresholds }) {
           return <React.Fragment key={n}>
             {i > 0 && <span className="stage-link" aria-hidden="true" />}
             <div className="stage-wrap">
-              <div className="stage-mark" aria-hidden={!cur}>{cur && <><span className="lab" style={{ color: 'var(--warn)', letterSpacing: '.18em' }}>You are here</span><svg width="14" height="9" viewBox="0 0 14 9" aria-hidden="true"><path d="M0 0H14L7 9Z" fill="#E0A04B" /></svg></>}</div>
+              <div className="stage-mark" aria-hidden={!cur}>{cur && <><span className="lab" style={{ color: 'var(--warn)', letterSpacing: '.18em' }}>You are here</span><svg width="14" height="9" viewBox="0 0 14 9" aria-hidden="true"><path d="M0 0H14L7 9Z" fill="var(--warn)" /></svg></>}</div>
               <div className={'stage' + (done ? ' done' : cur ? ' cur' : '')} aria-current={cur ? 'step' : undefined}>
-                <IconCircle size={38} bg={done ? 'var(--accent)' : cur ? 'rgba(224,160,75,.16)' : 'var(--bg3)'} bd={done ? 'var(--accent)' : cur ? 'var(--warn)' : 'var(--border)'}>{done ? <Icon name="check" size={18} color="#07221F" /> : cur ? <Icon name="coin" size={18} color="#E0A04B" /> : <Icon name="lock" size={17} color="#8A9CA5" />}</IconCircle>
+                <IconCircle size={38} bg={done ? 'var(--accent)' : cur ? 'color-mix(in srgb, var(--warn) 16%, transparent)' : 'var(--bg3)'} bd={done ? 'var(--accent)' : cur ? 'var(--warn)' : 'var(--border)'}>{done ? <Icon name="check" size={18} color="#07221F" /> : cur ? <Icon name="coin" size={18} color="var(--warn)" /> : <Icon name="lock" size={17} color="var(--muted)" />}</IconCircle>
                 <div><div style={{ fontWeight: 600, fontSize: 16 }}>{n}</div><div className="small" style={{ color: done ? 'var(--accent)' : cur ? 'var(--warn)' : 'var(--fg2)' }}>{thresholds[i]} pts</div></div>
               </div>
             </div>

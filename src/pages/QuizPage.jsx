@@ -211,7 +211,7 @@ export default function QuizPage({ id }) {
       {review && (<div className="pan">
         <div className="card teal pad"><div className="eyebrow">Ready to submit</div><div className="h2" style={{ margin: '8px 0 14px' }}>{done} of {total} questions answered</div>
           {!flat && secs.map((s) => { const n = s.questions.filter((q) => isAnswered(answers[q.id])).length; return <div key={s.id} className="row between" style={{ padding: '10px 0', borderTop: '1px solid var(--border)' }}><span>{s.title}</span><span className={'chip ' + (n === s.questions.length ? 'ok' : 'warn')}>{n} of {s.questions.length}</span></div>; })}
-          {missingReq.length > 0 && <div style={{ margin: '14px 0', padding: 14, background: 'var(--bg1)', border: '1px solid rgba(224,160,75,.5)', borderRadius: 12 }}>
+          {missingReq.length > 0 && <div style={{ margin: '14px 0', padding: 14, background: 'var(--bg1)', border: '1px solid color-mix(in srgb, var(--warn) 50%, transparent)', borderRadius: 12 }}>
             <div className="row center" style={{ gap: 14 }}><MascotPic moment="requiredLeft" size={84} /><div style={{ minWidth: 0 }}><div className="lab" style={{ color: 'var(--warn)' }}>Answer these to submit</div><div className="fg2 small" style={{ marginTop: 2 }}>{missingReq.length} required {missingReq.length === 1 ? 'answer' : 'answers'} left.</div></div></div>
             {missingReq.map((q) => <div key={q.id} className="row between center" style={{ padding: '10px 0', borderTop: '1px solid var(--border)', marginTop: 8 }}><span>Question {qs.findIndex((x) => x.id === q.id) + 1}{q.sectionTitle ? ' · ' + q.sectionTitle : ''}</span><button className="btn sm s" onClick={() => goTo(q)}>Go to question →</button></div>)}
           </div>}

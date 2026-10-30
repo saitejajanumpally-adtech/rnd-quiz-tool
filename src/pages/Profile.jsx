@@ -72,7 +72,7 @@ export default function Profile() {
             {[['Signed in with Google', user.email], ['Name', user.name], ['Role', ROLE_LABEL[role]], ['Rounds taken', sum.rounds]].map(([a, b]) => <div key={a} className="row between" style={{ padding: '12px 0', borderTop: '1px solid var(--border)' }}><span className="fg2">{a}</span><span>{b}</span></div>)}
             <p className="muted small" style={{ margin: '16px 0' }}>Your name comes from your Google account, so it can’t be changed here. Your email identifies your scores. Roles are managed by admins and creators.</p>
             <div className="row"><button className="btn" onClick={signOut}>Sign out</button><button className="btn" onClick={openTour}>Take the tour</button></div></div>
-          <div className="card" style={{ borderColor: 'rgba(226,116,90,.35)' }}><div className="lab" style={{ color: 'var(--danger)' }}>Remove my profile</div><p className="fg2" style={{ margin: '8px 0 14px' }}>Remove your sign-in profile from this tool. Your quiz history, scores and results stay, and admins keep them.</p><button className="btn danger" onClick={() => setRemoving(true)}>Remove my profile</button></div>
+          <div className="card" style={{ borderColor: 'color-mix(in srgb, var(--danger) 35%, transparent)' }}><div className="lab" style={{ color: 'var(--danger)' }}>Remove my profile</div><p className="fg2" style={{ margin: '8px 0 14px' }}>Remove your sign-in profile from this tool. Your quiz history, scores and results stay, and admins keep them.</p><button className="btn danger" onClick={() => setRemoving(true)}>Remove my profile</button></div>
         </div>}
       </div>
       {removing && <RemoveDialog busy={busy} onCancel={() => setRemoving(false)} onConfirm={doRemove} />}

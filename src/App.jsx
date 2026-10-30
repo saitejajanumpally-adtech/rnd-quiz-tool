@@ -59,7 +59,7 @@ function SignIn() {
       <div className="h2" style={{ marginBottom: 6 }}>{CONFIG.appName}</div>
       <p className="fg2" style={{ marginBottom: 22 }}>Sign in with your @{CONFIG.domain} account to take the quiz and see results.</p>
       {list.length > 0 ? (<>
-        <div className="demo" style={{ borderRadius: 10, border: '1px solid rgba(224,160,75,.4)', marginBottom: 6 }}>Demo mode with sample data. Pick a role to try.</div>
+        <div className="demo" style={{ borderRadius: 10, border: '1px solid color-mix(in srgb, var(--warn) 40%, transparent)', marginBottom: 6 }}>Demo mode with sample data. Pick a role to try.</div>
         {list.map((p) => <button key={p.uid} className="persona" onClick={() => store.auth.signIn(p.uid)}><b style={{ fontWeight: 500 }}>{p.name}</b><div className="small muted">{p.role[0].toUpperCase() + p.role.slice(1)} · {p.email}</div></button>)}
       </>) : <button className="btn p cta" disabled={busy} onClick={google}>{busy ? 'Opening Google…' : 'Sign in with Google'}</button>}
       {(authError || err) && <div role="alert" className="small" style={{ color: 'var(--danger)', marginTop: 16 }}>{authError || err}</div>}
