@@ -25,7 +25,7 @@ export function newQuestion(type, id = uid()) {
     case 'tf': return { ...base, correct: true, negativeMarking: false, penalty: 0 };
     case 'text': return { ...base, strong: '', rubric: 'Score 0 to 2 in steps of 0.5. Reward clear reasoning and relevance. Do not reward agreement with a particular view.' };
     case 'order': return { ...base, options: ['', '', ''] };
-    case 'match': return { ...base, pairs: [{ l: '', r: '' }, { l: '', r: '' }, { l: '', r: '' }] };
+    case 'match': return { ...base, pairs: [{ l: '', r: '' }, { l: '', r: '' }, { l: '', r: '' }], partial: true };
     case 'rating': return { ...base, points: 0, scale: { min: 1, max: 5, minLabel: 'Not at all', maxLabel: 'Completely' } };
     default: return base;
   }
@@ -58,6 +58,7 @@ export function toDocs(a) {
         const perm = permutation(q.pairs.length, seed);
         pub.left = q.pairs.map((p) => String(p.l)); pub.right = perm.map((o) => String(q.pairs[o].r));
         const inv = inverse(perm); k.correct = Object.fromEntries(inv.map((pubIdx, i) => [String(i), pubIdx]));
+        k.partial = !!q.partial;
       } else if (q.type === 'rating') { pub.scale = { ...q.scale }; pub.points = 0; }
       key.answers[q.id] = k;
       return pub;
@@ -84,7 +85,7 @@ export function fromDocs(id, quiz, key) {
       else if (p.type === 'tf') { q.correct = k.correct !== false; q.negativeMarking = !!k.negativeMarking; q.penalty = Number(k.penalty) || 0; }
       else if (p.type === 'text') { q.strong = k.strong || ''; q.rubric = k.rubric || ''; }
       else if (p.type === 'order') { q.options = (k.correct || p.options.map((_, i) => i)).map((pubIdx) => p.options[pubIdx]); }
-      else if (p.type === 'match') { q.pairs = p.left.map((l, i) => ({ l, r: p.right[(k.correct || {})[String(i)] ?? i] })); }
+      else if (p.type === 'match') { q.pairs = p.left.map((l, i) => ({ l, r: p.right[(k.correct || {})[String(i)] ?? i] })); q.partial = k.partial !== false; }
       else if (p.type === 'rating') q.scale = { ...p.scale };
       return q;
     })

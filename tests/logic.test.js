@@ -123,6 +123,7 @@ describe('quiz model', () => {
     const back = fromDocs('zq', quiz, key);
     expect(back.sections[1].questions[1].options).toEqual(['first', 'second', 'third', 'fourth']);
     expect(back.sections[1].questions[2].pairs).toEqual(a.sections[1].questions[2].pairs);
+    expect(back.sections[1].questions[2].partial).toBe(true); // on by default, same as Multi-select
     expect(back.sections[0].questions[1].correct).toEqual([0, 2]);
     expect(maxScore(quiz)).toBe(14);
   });
@@ -152,6 +153,10 @@ describe('scoring', () => {
     const m = k('q_match').correct;
     expect(scoreAuto(q('q_match'), k('q_match'), { ...m })).toBe(2);
     expect(scoreAuto(q('q_match'), k('q_match'), { '0': m['0'], '1': (m['1'] + 1) % 3, '2': (m['2'] + 1) % 3 })).toBe(0.5);
+    // a creator can turn partial credit off for Match the pairs, same as for Multi-select
+    const allOrNothingMatch = { ...k('q_match'), partial: false };
+    expect(scoreAuto(q('q_match'), allOrNothingMatch, { ...m })).toBe(2);
+    expect(scoreAuto(q('q_match'), allOrNothingMatch, { '0': m['0'], '1': (m['1'] + 1) % 3, '2': (m['2'] + 1) % 3 })).toBe(0);
     expect(scoreAuto(q('q_picture'), k('q_picture'), 0)).toBe(2);
     expect(scoreAuto(q('q_mcq'), k('q_mcq'), undefined)).toBe(0);
   });

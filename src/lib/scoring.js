@@ -33,6 +33,7 @@ export function scoreAuto(q, k, ans) {
     case 'match': {
       const c = k.correct || {}; const keys = Object.keys(c); if (!keys.length) return 0;
       const hit = keys.filter((i) => Number(ans[i]) === c[i]).length;
+      if (k.partial === false) return hit === keys.length ? pts : 0;
       return round05((hit / keys.length) * pts);
     }
     default: return 0;
