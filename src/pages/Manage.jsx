@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useApp } from '../ctx.jsx';
+import React, { useEffect, useRef, useState } from 'react';
+import { useApp, go } from '../ctx.jsx';
 import { store } from '../lib/store.js';
 import { quizStatus, STATUS_LABEL, ownerLabel } from '../lib/quizModel.js';
 import * as ops from '../lib/ops.js';
@@ -28,7 +28,33 @@ function AccessRequests({ id, item, user, toast }) {
 }
 
 const TONE = { draft: '', scheduled: 'info', live: 'ok', closed: 'warn', released: 'ok' };
+// Shown at the top of a quiz's Actions menu: where it stands right now, and what (if anything) to do next.
+const NEXT_STEP = {
+  draft: 'Draft — add questions, then publish when ready.',
+  scheduled: 'Scheduled — opens on its own. Nothing to do yet.',
+  live: 'Live — accepting responses until it closes.',
+  closed: 'Closed — run the release checklist to publish scores.',
+  released: 'Released — results and the leaderboard are live.'
+};
 const copy = async (t, toast) => { try { await navigator.clipboard.writeText(t); toast('Copied.'); } catch (e) { toast('Copy failed. Select the text and copy it by hand.', 'err'); } };
+
+// A quiz row's secondary actions, tucked behind one button instead of lined up on every row. `hint` is
+// the non-interactive status/next-step line shown above the actions.
+function RowMenu({ hint, items }) {
+  const [open, setOpen] = useState(false); const ref = useRef(null);
+  useEffect(() => { const f = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }; document.addEventListener('mousedown', f); return () => document.removeEventListener('mousedown', f); }, []);
+  return (
+    <span className="row-menu" ref={ref}>
+      <button type="button" className="btn sm" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>Actions</button>
+      {open && (
+        <div className="menu" role="menu">
+          {hint && <div className="small muted" style={{ padding: '10px' }}>{hint}</div>}
+          {items.map((it, i) => <button key={i} role="menuitem" disabled={it.disabled} style={it.danger ? { color: 'var(--danger)' } : undefined} onClick={() => { setOpen(false); it.onClick(); }}>{it.label}</button>)}
+        </div>
+      )}
+    </span>
+  );
+}
 
 const DATE_RANGES = [['all', 'All time'], ['quarter', 'This quarter'], ['m6', 'Last 6 months'], ['m12', 'Last 12 months']];
 export function ManageList() {
@@ -45,6 +71,11 @@ export function ManageList() {
   const archived = Object.values(arch.data || {}).sort((a, b) => b.opens - a.opens).filter((i) => i.opens >= from && ownerLabel(i).toLowerCase().includes(who.toLowerCase()));
   const act = async (i, name, fn, okMsg) => { setBusy(i.id + name); try { await fn(); await reload(); arch.reload(); toast(okMsg); } catch (e) { toast('That didn\'t work. ' + (e.message || ''), 'err'); } setBusy(''); };
   const archive = async (i) => { if (await ask({ title: 'Archive this quiz?', body: 'It leaves the Quiz library and the leaderboards, and stops counting towards everyone\'s points, streaks and averages. Only admins can still see it, and you can restore it any time. Nothing is deleted.', ok: 'Archive quiz' })) act(i, 'a', () => ops.setArchived(i.id, true, user, i.title), 'Quiz archived.'); };
+  const duplicate = async (i) => {
+    setBusy(i.id + 'c');
+    try { const item = await ops.duplicateQuiz(i.id, user); toast(`Duplicated as "${item.title}". Opening it to edit.`); go('/edit/' + item.id); }
+    catch (e) { toast('That didn\'t work. ' + (e.message || ''), 'err'); setBusy(''); }
+  };
   const restore = (i) => act(i, 'r', () => ops.setArchived(i.id, false, user, i.title), 'Quiz restored.');
   const del = async (i) => {
     const typed = await ask({ title: 'Delete this quiz?', body: `This permanently deletes "${i.title}" and every response, score and leaderboard entry for it — it disappears from each participant's own history too. This can't be undone. Archive it instead if you want to keep that history.\n\nType the quiz's exact name to confirm.`, input: { label: 'Quiz name', placeholder: i.title, required: true }, ok: 'Delete quiz', danger: true });
@@ -67,13 +98,25 @@ export function ManageList() {
         {items.length === 0 && allItems.length > 0 && <tr><td colSpan="6" className="muted">No quizzes match these filters.</td></tr>}
         {items.map((i) => { const st = quizStatus(i, now); return (
           <tr key={i.id}><td><a href={'#/manage/' + i.id} style={{ color: 'var(--fg)', fontWeight: 500 }}>{i.title || 'Untitled'}</a></td><td><Chip tone={TONE[st]}>{STATUS_LABEL[st]}</Chip></td><td className="fg2">{ownerLabel(i)}</td><td className="fg2">{i.opens ? fmtRange(i.opens, i.closes) : '–'}</td><td className="num">{i.released ? i.submittedCount : '–'}</td>
-            <td style={{ textAlign: 'right' }}><span className="row" style={{ justifyContent: 'flex-end', gap: 8 }}><a className="btn sm s" href={'#/manage/' + i.id}>{st === 'closed' ? 'Release checklist' : 'Open'}</a>{isAdmin && <button className="btn sm" disabled={!!busy} onClick={() => archive(i)}>Archive</button>}{isAdmin && <button className="btn sm danger" disabled={!!busy} onClick={() => del(i)}>Delete</button>}</span></td></tr>); })}
+            <td style={{ textAlign: 'right' }}><span className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
+              <a className="btn sm s" href={'#/manage/' + i.id}>{st === 'closed' ? 'Release checklist' : 'Open'}</a>
+              <RowMenu hint={NEXT_STEP[st]} items={[
+                { label: 'Duplicate', disabled: !!busy, onClick: () => duplicate(i) },
+                ...(isAdmin ? [{ label: 'Archive', disabled: !!busy, onClick: () => archive(i) }, { label: 'Delete', danger: true, disabled: !!busy, onClick: () => del(i) }] : [])
+              ]} />
+            </span></td></tr>); })}
       </tbody></table></div></div>}
       {tab === 'archived' && isAdmin && <div className="card"><div className="row between center mb"><div className="lab">Archived quizzes · admins only</div><Chip>Hidden from everyone else</Chip></div><div className="scroll"><table className="tbl"><thead><tr><th>Quiz</th><th>Created by</th><th>Archived on</th><th className="num">Submitted</th><th /></tr></thead><tbody>
         {arch.loading && <tr><td colSpan="5"><Spinner /></td></tr>}
         {!arch.loading && archived.length === 0 && Object.keys(arch.data || {}).length === 0 && <tr><td colSpan="5" className="muted">Nothing archived. Archive a quiz from the Active tab to hide it everywhere.</td></tr>}
         {!arch.loading && archived.length === 0 && Object.keys(arch.data || {}).length > 0 && <tr><td colSpan="5" className="muted">No archived quizzes match these filters.</td></tr>}
-        {archived.map((i) => <tr key={i.id}><td className="fg2">{i.title}</td><td className="muted">{ownerLabel(i)}</td><td className="muted">{i.archivedAt ? fmtDateTime(i.archivedAt) : '–'}</td><td className="num muted">{i.released ? i.submittedCount : '–'}</td><td style={{ textAlign: 'right' }}><span className="row" style={{ justifyContent: 'flex-end', gap: 8 }}><button className="btn sm s" disabled={!!busy} onClick={() => restore(i)}>Restore</button><button className="btn sm danger" disabled={!!busy} onClick={() => del(i)}>Delete</button></span></td></tr>)}
+        {archived.map((i) => <tr key={i.id}><td className="fg2">{i.title}</td><td className="muted">{ownerLabel(i)}</td><td className="muted">{i.archivedAt ? fmtDateTime(i.archivedAt) : '–'}</td><td className="num muted">{i.released ? i.submittedCount : '–'}</td><td style={{ textAlign: 'right' }}><span className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
+          <button className="btn sm s" disabled={!!busy} onClick={() => restore(i)}>Restore</button>
+          <RowMenu hint="Archived — restore it to make it active again." items={[
+            { label: 'Duplicate', disabled: !!busy, onClick: () => duplicate(i) },
+            { label: 'Delete', danger: true, disabled: !!busy, onClick: () => del(i) }
+          ]} />
+        </span></td></tr>)}
       </tbody></table></div></div>}
     </div>
   );

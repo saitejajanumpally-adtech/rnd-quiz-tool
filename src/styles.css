@@ -54,11 +54,13 @@ h1,h2,h3,p{margin:0}
 .menu .head{padding:10px;display:flex;gap:10px;align-items:center}
 .menu a,.menu button{display:block;width:100%;text-align:left;padding:10px;border:0;background:none;color:var(--fg2);border-top:1px solid var(--border);border-radius:0}
 .menu a:hover,.menu button:hover{background:var(--bg1);color:var(--fg);text-decoration:none}
-/* the appearance switcher's segmented control sits inside the menu but isn't a menu row itself */
-.menu .seg{display:flex}
-.menu .seg button{width:auto;flex:1;text-align:center;padding:7px 10px;border:1px solid var(--border2);border-radius:8px;color:var(--fg2)}
-.menu .seg button.on{background:var(--mint-soft);border-color:var(--primary);color:var(--fg)}
-.menu .seg button:hover{background:var(--bg1);color:var(--fg)}
+/* appearance switcher: three small icon buttons, not a full menu row */
+.menu .theme-toggle{display:flex;gap:4px}
+.menu .theme-toggle button{width:30px;height:30px;flex:none;display:inline-flex;align-items:center;justify-content:center;padding:0;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--muted)}
+.menu .theme-toggle button:hover{background:var(--bg1);color:var(--fg)}
+.menu .theme-toggle button.on{background:var(--mint-soft);border-color:var(--primary);color:var(--primary)}
+/* a quiz row's secondary actions, tucked behind one "Actions" button */
+.row-menu{position:relative;display:inline-flex}
 /* type + layout */
 .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 .lab{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}

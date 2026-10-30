@@ -1,11 +1,11 @@
 // Everything the app does with the database lives here, so screens stay simple and this can be tested.
 import { store, rid, DELETE_FIELD } from './store.js';
 import { CONFIG } from '../config.js';
-import { toDocs, fromDocs, indexItem, allQuestions, hasWritten, fillTemplate } from './quizModel.js';
+import { toDocs, fromDocs, indexItem, allQuestions, hasWritten, fillTemplate, uid } from './quizModel.js';
 import { gradeQuiz, hasAnyAnswer, applyMovement, topRows } from './scoring.js';
 import { buildWrittenExport } from './written.js';
 import { toCsv } from './csv.js';
-import { fmtDateTime } from './time.js';
+import { fmtDateTime, suggestSchedule } from './time.js';
 import { DEFAULT_THRESHOLDS } from './stages.js';
 
 export const DEFAULT_SETTINGS = { leaderboardVisibility: 'leads', showMovement: true, newQuizDefaults: { autoSubmit: false, allowReviewRequests: false }, emails: { closingReminder: true, releaseNotice: true }, thresholds: DEFAULT_THRESHOLDS, defaultMascots: ['robot'], integrations: { gas: false }, retention: 'forever', highlightDays: 5 };
@@ -181,6 +181,23 @@ export async function listPendingImports(quizId) { return store.list('pendingImp
 export async function loadAuthoring(id) {
   const [q, k] = await Promise.all([store.get('quizzes/' + id), store.get('quizKeys/' + id)]);
   return q ? fromDocs(id, q, k) : null;
+}
+// Copies a quiz's sections and questions (including the answer key) into a brand-new draft, owned by
+// whoever duplicated it, scheduled like any other new quiz. The original, its responses and its results
+// are untouched — this never shares an id with anything, so editing the copy can't affect the source.
+export async function duplicateQuiz(id, user) {
+  const a = await loadAuthoring(id);
+  if (!a) throw new Error('That quiz no longer exists.');
+  const sched = suggestSchedule(await loadIndex(), Date.now());
+  const copy = {
+    ...a, id: uid('z'), title: `${a.title || 'Untitled'} (copy)`,
+    opens: sched.opens, closes: sched.closes, keyAt: sched.keyAt,
+    ownerEmail: user.email, ownerName: user.name || '', editors: [],
+    sections: a.sections.map((s) => ({ ...s, id: uid('s'), questions: s.questions.map((q) => ({ ...q, id: uid() })) }))
+  };
+  const item = await saveQuiz(copy, user, { publish: false });
+  await log(user, 'Duplicated quiz', `${a.title} → ${copy.title}`);
+  return item;
 }
 export async function saveQuiz(a, user, { publish = false } = {}) {
   if (!a.ownerName && a.ownerEmail === user.email) a = { ...a, ownerName: user.name || '' };

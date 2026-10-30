@@ -70,13 +70,15 @@ function SignIn() {
 function ThemeSwitch() {
   const [pref, setPref] = useState(getThemePref());
   const pick = (p) => { setThemePref(p); setPref(p); };
+  const opts = [['system', 'monitor', 'Match system'], ['light', 'sun', 'Light'], ['dark', 'moon', 'Dark']];
   return (
-    <div style={{ padding: '10px 10px 4px' }}>
-      <div className="small muted" style={{ marginBottom: 6 }}>Appearance</div>
-      <div className="seg">
-        <button type="button" className={pref === 'system' ? 'on' : ''} onClick={() => pick('system')}>System</button>
-        <button type="button" className={pref === 'light' ? 'on' : ''} onClick={() => pick('light')}>Light</button>
-        <button type="button" className={pref === 'dark' ? 'on' : ''} onClick={() => pick('dark')}>Dark</button>
+    <div className="row between" style={{ padding: '8px 10px', alignItems: 'center' }}>
+      <span className="small muted">Appearance</span>
+      <div className="theme-toggle" role="radiogroup" aria-label="Appearance">
+        {opts.map(([p, icon, label]) => (
+          <button key={p} type="button" role="radio" aria-checked={pref === p} aria-label={label} title={label}
+            className={pref === p ? 'on' : ''} onClick={() => pick(p)}><Icon name={icon} size={16} /></button>
+        ))}
       </div>
     </div>
   );

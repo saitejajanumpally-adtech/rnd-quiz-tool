@@ -88,7 +88,11 @@ export const Icon = ({ name, size, color }) => ({
   link: <Svg size={size} color={color}><path d="M10 14a3.5 3.5 0 0 0 4.2.6l2.1-2.1a3.5 3.5 0 0 0-4.9-4.9l-1 1" /><path d="M14 10a3.5 3.5 0 0 0-4.2-.6L7.7 10.5a3.5 3.5 0 0 0 4.9 4.9l1-1" /></Svg>,
   trash: <Svg size={size} color={color}><path d="M5 7h14" /><path d="M10 11v6M14 11v6" /><path d="M6.5 7 7.3 20a2 2 0 0 0 2 1.9h5.4a2 2 0 0 0 2-1.9L17.5 7" /><path d="M9.5 7V4.8A1 1 0 0 1 10.5 4h3a1 1 0 0 1 1 1V7" /></Svg>,
   copy: <Svg size={size} color={color}><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></Svg>,
-  menu: <Svg size={size} color={color}><path d="M4 7h16M4 12h16M4 17h16" /></Svg>
+  menu: <Svg size={size} color={color}><path d="M4 7h16M4 12h16M4 17h16" /></Svg>,
+  sun: <Svg size={size} color={color}><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></Svg>,
+  moon: <Svg size={size} color={color}><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" /></Svg>,
+  monitor: <Svg size={size} color={color}><rect x="3" y="4.5" width="18" height="12" rx="2" /><path d="M8.5 20h7M12 16.5V20" /></Svg>,
+  more: <Svg size={size} color={color}><circle cx="5" cy="12" r="1.4" fill={color} stroke="none" /><circle cx="12" cy="12" r="1.4" fill={color} stroke="none" /><circle cx="19" cy="12" r="1.4" fill={color} stroke="none" /></Svg>
 }[name]);
 export const IconCircle = ({ children, size = 44, bg = 'var(--bg1)', bd = 'var(--border2)' }) => <span style={{ width: size, height: size, borderRadius: '50%', background: bg, border: '1px solid ' + bd, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>{children}</span>;
 // A scorecard: icon on top, label and value centered.

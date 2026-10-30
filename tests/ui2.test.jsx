@@ -288,8 +288,9 @@ describe('manage quizzes, archive and admin settings', () => {
     render(<App />); await persona('Sai Teja'); await go('#/manage');
     const row = (await screen.findByText('R&D Quiz · ' + (await ops.loadIndex()).z_oct1.title.split('· ')[1] + '· 1', { exact: false })) ;
     expect(row).toBeTruthy();
-    const archiveButtons = await screen.findAllByRole('button', { name: 'Archive' });
-    fireEvent.click(archiveButtons[0]); fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Archive quiz' }));
+    const actionButtons = await screen.findAllByRole('button', { name: 'Actions' });
+    fireEvent.click(actionButtons[0]); fireEvent.click(await screen.findByRole('menuitem', { name: 'Archive' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Archive quiz' }));
     await waitFor(async () => expect(Object.keys(await ops.loadArchivedIndex()).length).toBe(1));
     fireEvent.click(await screen.findByRole('button', { name: /Archived · 1/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Restore' }));
