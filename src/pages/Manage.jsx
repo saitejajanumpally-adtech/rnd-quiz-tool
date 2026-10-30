@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp, go } from '../ctx.jsx';
 import { store } from '../lib/store.js';
 import { quizStatus, STATUS_LABEL, ownerLabel } from '../lib/quizModel.js';
@@ -39,18 +40,38 @@ const NEXT_STEP = {
 const copy = async (t, toast) => { try { await navigator.clipboard.writeText(t); toast('Copied.'); } catch (e) { toast('Copy failed. Select the text and copy it by hand.', 'err'); } };
 
 // A quiz row's secondary actions, tucked behind one button instead of lined up on every row. `hint` is
-// the non-interactive status/next-step line shown above the actions.
+// the non-interactive status/next-step line shown above the actions. Rendered through a portal straight
+// onto <body> and positioned from the trigger button's own screen position: the table that holds these
+// rows scrolls horizontally (.scroll), and any scrollable ancestor clips an absolutely-positioned child
+// to its own box, which cut the dropdown off instead of letting it float over the rows below it.
 function RowMenu({ hint, items }) {
-  const [open, setOpen] = useState(false); const ref = useRef(null);
-  useEffect(() => { const f = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }; document.addEventListener('mousedown', f); return () => document.removeEventListener('mousedown', f); }, []);
+  const [open, setOpen] = useState(false); const [pos, setPos] = useState(null);
+  const btnRef = useRef(null); const menuRef = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const r = btnRef.current.getBoundingClientRect();
+    const estHeight = (hint ? 40 : 0) + items.length * 40 + 16;
+    const right = window.innerWidth - r.right;
+    setPos(r.bottom + estHeight > window.innerHeight
+      ? { top: 'auto', bottom: window.innerHeight - r.top + 6, right }
+      : { top: r.bottom + 6, bottom: 'auto', right });
+    const onDown = (e) => { if (!menuRef.current?.contains(e.target) && !btnRef.current.contains(e.target)) setOpen(false); };
+    const onEscOrScroll = (e) => { if (e.type === 'scroll' || e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onEscOrScroll);
+    window.addEventListener('scroll', onEscOrScroll, true);
+    window.addEventListener('resize', onEscOrScroll);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onEscOrScroll); window.removeEventListener('scroll', onEscOrScroll, true); window.removeEventListener('resize', onEscOrScroll); };
+  }, [open]);
   return (
-    <span className="row-menu" ref={ref}>
-      <button type="button" className="btn sm" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>Actions</button>
-      {open && (
-        <div className="menu" role="menu">
+    <span className="row-menu">
+      <button ref={btnRef} type="button" className="btn sm" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>Actions</button>
+      {open && pos && createPortal(
+        <div className="menu" role="menu" ref={menuRef} style={{ position: 'fixed', top: pos.top, bottom: pos.bottom, right: pos.right }}>
           {hint && <div className="small muted" style={{ padding: '10px' }}>{hint}</div>}
           {items.map((it, i) => <button key={i} role="menuitem" disabled={it.disabled} style={it.danger ? { color: 'var(--danger)' } : undefined} onClick={() => { setOpen(false); it.onClick(); }}>{it.label}</button>)}
-        </div>
+        </div>,
+        document.body
       )}
     </span>
   );
