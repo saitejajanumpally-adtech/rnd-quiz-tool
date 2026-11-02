@@ -16,6 +16,9 @@ export function pickCurrent(index, now, settings) {
   const closed = by('closed').sort((a, b) => b.closes - a.closes)[0]; if (closed) return { stage: 'closed', item: closed };
   const released = by('released').sort((a, b) => b.opens - a.opens)[0];
   const upcoming = by('scheduled').sort((a, b) => a.opens - b.opens)[0];
+  // A round opening within a day takes over the homepage even from a fresh "results are out" highlight —
+  // otherwise a quiz released right before the next one opens can sit there for days, like it did here.
+  if (upcoming && upcoming.opens - now < DAY) return { stage: 'upcoming', item: upcoming, last: released };
   if (released && now - (released.releasedAt || 0) < (settings.highlightDays || 5) * DAY) return { stage: 'released', item: released, next: upcoming };
   if (upcoming) return { stage: 'upcoming', item: upcoming, last: released };
   return { stage: 'none', last: released };

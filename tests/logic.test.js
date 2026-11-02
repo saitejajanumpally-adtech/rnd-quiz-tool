@@ -5,6 +5,7 @@ import { parseCsv, toCsv, toObjects } from '../src/lib/csv.js';
 import { newQuiz, newQuestion, toDocs, fromDocs, validate, questionErrors, quizStatus, fillTemplate, maxScore, permutation } from '../src/lib/quizModel.js';
 import { scoreAuto, gradeQuiz, isAnswered } from '../src/lib/scoring.js';
 import { buildWrittenExport, parseWrittenUpload } from '../src/lib/written.js';
+import { pickCurrent } from '../src/pages/Arena.jsx';
 
 describe('time', () => {
   it('suggests the next second Tuesday with Thursday close and Saturday key', () => {
@@ -136,6 +137,17 @@ describe('quiz model', () => {
     expect(quizStatus(it, 5)).toBe('scheduled'); expect(quizStatus(it, 15)).toBe('live'); expect(quizStatus(it, 25)).toBe('closed');
     expect(quizStatus({ ...it, released: true }, 25)).toBe('released'); expect(quizStatus({ published: false }, 5)).toBe('draft');
     expect(fillTemplate('Hi {a} {b}', { a: 'x' })).toBe('Hi x {b}');
+  });
+  it('lets a round opening within a day take over the homepage from a fresh "results are out" highlight', () => {
+    const now = Date.now();
+    const released = { id: 'z_old', published: true, released: true, releasedAt: now - 1 * DAY, opens: now - 10 * DAY, closes: now - 9 * DAY };
+    const farUpcoming = { id: 'z_far', published: true, opens: now + 4 * DAY, closes: now + 5 * DAY };
+    const soonUpcoming = { id: 'z_soon', published: true, opens: now + 0.5 * DAY, closes: now + 1.5 * DAY };
+    // released just now, next round over a week out: the release highlight wins, as before
+    expect(pickCurrent({ [released.id]: released, [farUpcoming.id]: farUpcoming }, now, {}).stage).toBe('released');
+    // released just now, but the next round opens in under a day: that upcoming round takes over instead
+    const soon = pickCurrent({ [released.id]: released, [soonUpcoming.id]: soonUpcoming }, now, {});
+    expect(soon.stage).toBe('upcoming'); expect(soon.item.id).toBe('z_soon'); expect(soon.last.id).toBe('z_old');
   });
 });
 
