@@ -294,11 +294,18 @@ export function checklist(item, now) {
   return { steps, ready: steps.every((s) => s.done) };
 }
 export async function release(id, user, title, forced) {
-  await store.update('quizKeys/' + id, { released: true });
-  await patchIndex(id, { released: true, releasedAt: Date.now() });
+  await store.batch([
+    { type: 'update', path: 'quizKeys/' + id, data: { released: true } },
+    { type: 'update', path: 'quizIndex/main', data: { [`items.${id}.released`]: true, [`items.${id}.releasedAt`]: Date.now() } }
+  ]);
   await log(user, forced ? 'Released results (checklist skipped)' : 'Released results', title);
 }
 export async function markOp(id, op, user, label) { await patchIndex(id, { ['ops.' + op]: Date.now() }); if (label) await log(user, label, id); }
+// A quiz already showing "Released" in the Library can still have quizKeys.released stuck at false if an
+// earlier release() ran before the two flags were written atomically (see release() above) — leads are the
+// only role whose access checks that field directly, so this silently locks them out with no visible symptom
+// for admins/creators. Re-applies the flag; harmless to run on a quiz that's already in sync.
+export async function resyncRelease(id) { await store.update('quizKeys/' + id, { released: true }); }
 
 // ---------------- exports
 export async function resultsCsv(id) {
