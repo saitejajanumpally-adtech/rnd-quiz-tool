@@ -112,7 +112,7 @@ export default function Leaderboard({ id }) {
 }
 function RankingInfo() {
   const { ask } = useApp();
-  return <button className="link" style={{ background: 'none', border: 0, color: 'var(--accent)' }} onClick={() => ask({ title: 'How rankings work', body: 'Scores add up every question’s points. Written answers are scored against the quiz’s rubric.\n\nPeople with the same score share a rank, so the next rank is skipped.\n\nChange compares your rank with the previous round. It only shows when you took both rounds, and ranks can shift when more or fewer people take part.', ok: 'Got it' })}>How rankings work ↗</button>;
+  return <button className="link" style={{ background: 'none', border: 0, color: 'var(--accent)' }} onClick={() => ask({ title: 'How rankings work', body: 'Scores add up every question’s points. Written answers are scored against the quiz’s rubric.\n\nWhen people end up with the same score, whoever submitted first is ranked higher. If they submitted at the same time, whoever took less time to finish is ranked higher. If that’s still tied, it falls back to alphabetical order.\n\nChange compares your rank with the previous round. It only shows when you took both rounds, and ranks can shift when more or fewer people take part.', ok: 'Got it' })}>How rankings work ↗</button>;
 }
 
 // A separate page for leads and above. Movement is always against the previous round.
