@@ -72,10 +72,17 @@ export function gradeQuiz({ quiz, key, responses, written = {}, autoSubmit }) {
     });
     const total = round05(secScore.reduce((a, b) => a + b, 0));
     const missingRequired = qs.filter((q) => q.required && !isAnswered((r.answers || {})[q.id])).length;
-    rows.push({ uid: r.uid, name: r.name || r.email, email: r.email, total, max, auto: !!r.auto || !r.submitted, missingRequired, sections: quiz.sections.map((s, i) => ({ title: s.flat ? 'All questions' : s.title, score: round05(secScore[i]), max: secMax[i] })), questions: per });
+    // Backfilled/imported responses have no startedAt, so there's no real "time taken" to compare — they
+    // fall through to the submittedAt (import time) and then name tiebreaks like anyone else.
+    const duration = (r.submittedAt && r.startedAt) ? r.submittedAt - r.startedAt : null;
+    rows.push({ uid: r.uid, name: r.name || r.email, email: r.email, total, max, auto: !!r.auto || !r.submitted, missingRequired, submittedAt: r.submittedAt || null, duration, sections: quiz.sections.map((s, i) => ({ title: s.flat ? 'All questions' : s.title, score: round05(secScore[i]), max: secMax[i] })), questions: per });
   });
-  rows.sort((a, b) => b.total - a.total || String(a.name).localeCompare(String(b.name)));
-  rows.forEach((r, i) => { r.rank = i > 0 && rows[i - 1].total === r.total ? rows[i - 1].rank : i + 1; });
+  // Equal scores are broken by: who submitted first, then who took less time, then alphabetically.
+  rows.sort((a, b) => b.total - a.total
+    || (a.submittedAt ?? Infinity) - (b.submittedAt ?? Infinity)
+    || (a.duration ?? Infinity) - (b.duration ?? Infinity)
+    || String(a.name).localeCompare(String(b.name)));
+  rows.forEach((r, i) => { r.rank = i + 1; });
   const avg = rows.length ? rows.reduce((a, r) => a + r.total, 0) / rows.length : 0;
   const pub = { count: rows.length, avg: Math.round(avg * 100) / 100, max, top: topRows(rows) };
   return { rows, pub, unscoredWritten };

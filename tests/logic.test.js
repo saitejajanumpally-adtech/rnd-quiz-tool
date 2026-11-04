@@ -183,7 +183,7 @@ describe('scoring', () => {
   });
   const resp = (uid, answers, submitted = true) => ({ uid, name: uid, email: uid + '@databeat.io', answers, submitted });
   const good = { q_mcq: 1, q_multi: [0, 2], q_tf: false, q_picture: 0, q_text: 'long answer' };
-  it('grades, ranks with ties, and respects submit and auto-submit rules', () => {
+  it('grades, breaks ties by submit time then name, and respects submit and auto-submit rules', () => {
     const responses = [resp('a', good), resp('b', { ...good, q_mcq: 0 }), resp('c', { ...good, q_mcq: 0 }), resp('d', { q_mcq: 1 }, false), resp('e', {}, false)];
     const written = { q_text: { a: { score: 1.5, feedback: 'ok' }, b: { score: 1, feedback: '' } } };
     let g = gradeQuiz({ quiz, key, responses, written, autoSubmit: false });
@@ -195,8 +195,21 @@ describe('scoring', () => {
     expect(g.rows.map((r) => r.uid)).toContain('d'); expect(g.rows.map((r) => r.uid)).not.toContain('e');
     expect(g.rows.find((r) => r.uid === 'd').auto).toBe(true);
     const tie = gradeQuiz({ quiz, key, responses: [resp('x', good), resp('y', good), resp('z', { q_tf: false })], written: {}, autoSubmit: false });
-    expect(tie.rows.map((r) => r.rank)).toEqual([1, 1, 3]);
+    // x and y tie on total with no submittedAt recorded, so it falls through to alphabetical: x then y.
+    expect(tie.rows.map((r) => r.uid)).toEqual(['x', 'y', 'z']);
+    expect(tie.rows.map((r) => r.rank)).toEqual([1, 2, 3]);
     expect(tie.pub.top.length).toBe(3); expect(isAnswered(0)).toBe(true); expect(isAnswered('  ')).toBe(false);
+  });
+  it('breaks a tie by earlier submission time, then by shorter time taken', () => {
+    const base = (uid, submittedAt, startedAt) => ({ ...resp(uid, good), submittedAt, startedAt });
+    let g = gradeQuiz({ quiz, key, responses: [base('late', 2000, 1000), base('early', 1000, 500)], written: {}, autoSubmit: false });
+    expect(g.rows.map((r) => r.uid)).toEqual(['early', 'late']); // earlier submittedAt wins regardless of name order
+    g = gradeQuiz({ quiz, key, responses: [base('slow', 1000, 0), base('fast', 1000, 700)], written: {}, autoSubmit: false });
+    expect(g.rows.map((r) => r.uid)).toEqual(['fast', 'slow']); // same submittedAt, shorter duration wins
+    // an imported response (no startedAt) has no duration to compare, but still sorts by its submittedAt (import time)
+    const imported = { ...resp('backfilled', good), submittedAt: 9000 };
+    g = gradeQuiz({ quiz, key, responses: [imported, base('live', 5000, 4990)], written: {}, autoSubmit: false });
+    expect(g.rows.map((r) => r.uid)).toEqual(['live', 'backfilled']);
   });
   it('exports written answers and validates the scoring upload', () => {
     const responses = [resp('a', good), resp('b', { q_mcq: 1 })];
