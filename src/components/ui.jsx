@@ -133,7 +133,7 @@ export function Journey({ points, thresholds }) {
         })}
       </div>
       <div className="milestone">
-        {st.nextName ? <><span style={{ fontWeight: 500 }}>Next milestone: {st.nextName}</span><div className="bar" style={{ flex: '1 1 160px' }}><i style={{ width: Math.round(Math.min(1, points / next) * 100) + '%', background: 'var(--accent)' }} /></div><span className="mono">{pts} / {next} pts</span><span className="fg2">{toNext} more points to reach {st.nextName}</span></> : <span className="fg2">You reached the end of the funnel. Conversion.</span>}
+        {st.nextName ? <><span style={{ fontWeight: 500 }}>Next milestone: {st.nextName}</span><div className="bar" style={{ flex: '1 1 160px' }}><i style={{ width: Math.round(Math.min(1, points / next) * 100) + '%', background: 'var(--accent)' }} /></div><span className="fg2">{toNext} more points to reach {st.nextName}</span></> : <span className="fg2">You reached the end of the funnel. Conversion.</span>}
       </div>
     </div>
   );
