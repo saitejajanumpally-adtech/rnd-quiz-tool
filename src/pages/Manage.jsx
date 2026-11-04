@@ -219,6 +219,10 @@ function ImportAnswers({ id, item, quiz, user, toast, run }) {
     setUp(null); pend.reload();
     return `Imported ${r.imported} ${r.imported === 1 ? 'participant' : 'participants'} now.${r.pending.length ? ` ${r.pending.length} haven't signed into the tool yet — their answers are held and will apply automatically the moment they do (checked every 5 minutes): ${r.pending.join(', ')}.` : ''}`;
   });
+  const reconcile = () => run('reconcile', () => ops.reconcilePendingImports(id, user), (r) => {
+    pend.reload();
+    return r.applied ? `${r.applied} ${r.applied === 1 ? 'person who has' : 'people who have'} since signed in ${r.applied === 1 ? 'is' : 'are'} now counted.${r.stillWaiting ? ` ${r.stillWaiting} still haven't signed in.` : ''}` : 'Nobody new has signed in yet.';
+  });
   return (
     <div className="card mt"><div className="h3" style={{ marginBottom: 4 }}>Import participant answers</div>
       <div className="fg2" style={{ marginBottom: 8 }}>For a quiz that happened before it was run in this tool. Download the template, fill in what each person actually answered, then upload it — scores, the leaderboard and everyone's own history all work exactly as if they'd taken it live. Anyone who hasn't signed into the tool yet is held as a pending import and applies itself automatically the moment they do — no need to re-upload.</div>
@@ -232,7 +236,7 @@ function ImportAnswers({ id, item, quiz, user, toast, run }) {
         {up.errors.length > 10 && <div className="muted">…and {up.errors.length - 10} more.</div>}
         <div className="row" style={{ marginTop: 8 }}><button className="btn sm p" disabled={!up.rows.length} onClick={doImport}>Import {up.rows.length || ''} {up.rows.length === 1 ? 'participant' : 'participants'}</button><button className="btn sm" onClick={() => setUp(null)}>Discard</button></div>
       </div>}
-      {!pend.loading && (pend.data || []).length > 0 && <div className="muted small" style={{ marginTop: 10 }}>Still waiting for a sign-in: {pend.data.map((p) => p.email).join(', ')}.</div>}
+      {!pend.loading && (pend.data || []).length > 0 && <div className="muted small" style={{ marginTop: 10 }}>Still waiting for a sign-in: {pend.data.map((p) => p.email).join(', ')}. <button className="btn sm s" style={{ marginTop: 6 }} onClick={reconcile}>Check for new sign-ins</button></div>}
     </div>
   );
 }

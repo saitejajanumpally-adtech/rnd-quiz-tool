@@ -176,6 +176,28 @@ export async function importPastResponses(id, rows, user, title) {
   return { imported: applied, pending };
 }
 export async function listPendingImports(quizId) { return store.list('pendingImports', { where: [['quizId', '==', quizId]] }); }
+// Finishing a pending import as the person themselves only works for their own email (see
+// applyPendingImports) — the security rules let a participant write their own account's sign-in state,
+// but writing an "imported" response for anyone else requires admin access. Without the optional Apps
+// Script helper running as a backstop, a pending import otherwise never gets a second chance to apply
+// itself once the person has actually signed in. This re-checks every pending entry for this quiz right
+// now, as the calling admin, and finishes off anyone who already has an account.
+export async function reconcilePendingImports(quizId, user) {
+  const pend = await listPendingImports(quizId);
+  if (!pend.length) return { applied: 0, stillWaiting: 0 };
+  const found = await Promise.all(pend.map((p) => store.list('users', { where: [['email', '==', p.email]] })));
+  const now = Date.now(); const batchOps = []; let applied = 0;
+  pend.forEach((p, i) => {
+    const u = found[i][0]; if (!u) return;
+    batchOps.push({ type: 'set', path: `responses/${p.quizId}_${u.id}`, data: { quizId: p.quizId, uid: u.id, email: p.email, name: u.name || p.email, answers: p.answers || {}, submitted: true, submittedAt: now, imported: true, importedBy: user.email, importedAt: p.importedAt || now } });
+    Object.entries(p.written || {}).forEach(([qid, w]) => batchOps.push({ type: 'set', merge: true, path: `writtenScores/${p.quizId}_${qid}`, data: { scores: { [u.id]: { score: w.score, feedback: w.feedback || '', flag: false, at: now } } } }));
+    batchOps.push({ type: 'del', path: `pendingImports/${p.id}` });
+    applied += 1;
+  });
+  if (batchOps.length) await store.batch(batchOps);
+  if (applied) await log(user, 'Reconciled pending imports', `${applied} of ${pend.length} now applied`);
+  return { applied, stillWaiting: pend.length - applied };
+}
 
 // ---------------- authoring
 export async function loadAuthoring(id) {

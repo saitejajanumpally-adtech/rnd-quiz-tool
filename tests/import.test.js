@@ -73,6 +73,30 @@ describe('importing answers for a quiz that happened before the tool ran it', ()
     expect(resp.submitted).toBe(true); expect(resp.imported).toBe(true); expect(resp.answers).toEqual({ m1: 1, x1: [2], t1: false });
     expect(await ops.listPendingImports('z_past')).toEqual([]);
   });
+  // On the real site, a participant's own sign-in can only finish *their own* pending import (writing an
+  // "imported" response for anyone else needs admin access per firestore.rules) — so without the optional
+  // Apps Script helper configured, most pending imports never get a second chance to apply. This is the
+  // admin-driven alternative: re-check every pending entry for a quiz right now.
+  it('reconciles pending imports for everyone who has since signed in, as the admin', async () => {
+    const a = pastQuiz();
+    await ops.saveQuiz(a, admin, { publish: true });
+    await ops.importPastResponses('z_past', [
+      { email: 'p1@databeat.io', answers: { m1: 0, x1: [0, 1], t1: true } },
+      { email: 'p2@databeat.io', answers: { m1: 1, x1: [2], t1: false } }
+    ], admin, 'Past round');
+    expect((await ops.listPendingImports('z_past')).length).toBe(2);
+    let r = await ops.reconcilePendingImports('z_past', admin);
+    expect(r).toEqual({ applied: 0, stillWaiting: 2 }); // neither has signed in yet
+    // p1 now has an account (as if they'd signed in on the real site, where the security rules block their
+    // own client from finishing the import themselves — unlike this in-memory test store, which has no such
+    // restriction, so we create the account directly rather than going through ensureUser/applyPendingImports).
+    await store.set('users/p1', { name: p1.name, email: p1.email, lastSeen: Date.now(), firstSeen: Date.now(), deleted: false, deletedAt: null });
+    r = await ops.reconcilePendingImports('z_past', admin);
+    expect(r).toEqual({ applied: 1, stillWaiting: 1 });
+    const resp = await store.get('responses/z_past_p1');
+    expect(resp.submitted).toBe(true); expect(resp.imported).toBe(true); expect(resp.importedBy).toBe(admin.email);
+    expect((await ops.listPendingImports('z_past')).map((p) => p.email)).toEqual(['p2@databeat.io']);
+  });
   it('an imported response grades, releases and lands on the leaderboard exactly like a live one', async () => {
     await ops.ensureUser(p1); await ops.ensureUser(p2);
     const a = pastQuiz();
