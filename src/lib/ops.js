@@ -278,11 +278,19 @@ export async function calculate(id, user) {
   await log(user, 'Calculated scores', `${quiz.title}: ${g.rows.length} participants, ${g.unscoredWritten} written answers still unscored`);
   return { count: g.rows.length, unscored: g.unscoredWritten, auto: g.rows.filter((r) => r.auto).length, avg: g.pub.avg, missingRequired: g.rows.filter((r) => r.missingRequired).length };
 }
-export async function exportWrittenFor(id) {
+// onlyUnscored: leave out any answer that already has a saved score, so a re-export after backfilling
+// or reconciling new sign-ins only needs the new people scored, not everyone all over again.
+export async function exportWrittenFor(id, onlyUnscored) {
   const quiz = await store.get('quizzes/' + id);
   const responses = await store.list('responses', { where: [['quizId', '==', id]] });
   const key = await store.get('quizKeys/' + id).catch(() => null);
-  return { quiz, ...buildWrittenExport(quiz, responses, !!quiz.autoSubmit, key || {}) };
+  let skip = null;
+  if (onlyUnscored) {
+    const written = await loadWritten(id, quiz);
+    skip = new Set();
+    Object.entries(written).forEach(([qid, scores]) => Object.keys(scores || {}).forEach((uid) => skip.add(`${uid}~${qid}`)));
+  }
+  return { quiz, ...buildWrittenExport(quiz, responses, !!quiz.autoSubmit, key || {}, skip) };
 }
 export async function saveWrittenScores(id, rows, user, title) {
   const byQ = {}; const now = Date.now();

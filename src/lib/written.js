@@ -26,8 +26,10 @@ const INSTRUCTIONS = [
 ];
 export const CLAUDE_MESSAGE = 'Here is a CSV of written quiz answers. Follow the instructions in the comment lines at the top and the rubric on each row. Return the complete CSV with the score, feedback and flag columns filled in. Keep every other column exactly as it is, and use scores in steps of 0.5.';
 
-// CSV of written answers for scoring outside the tool (for example in Claude). One self-contained file: rubric included.
-export function buildWrittenExport(quiz, responses, autoSubmit, key = {}) {
+// CSV of written answers for scoring outside the tool (for example in Claude). One self-contained file: rubric
+// included. skipKeys (a Set of "uid~qid"), when given, leaves out answers that already have a score — for
+// re-exporting just the newly backfilled or newly submitted people without re-scoring everyone else.
+export function buildWrittenExport(quiz, responses, autoSubmit, key = {}, skipKeys = null) {
   const qs = allQuestions(quiz).filter((q) => q.type === 'text');
   const rows = [HEADER]; const keys = {};
   responses.forEach((r) => {
@@ -35,7 +37,9 @@ export function buildWrittenExport(quiz, responses, autoSubmit, key = {}) {
     qs.forEach((q) => {
       const a = (r.answers || {})[q.id];
       if (!isAnswered(a)) return;
-      const k = `${r.uid}~${q.id}`; keys[k] = { uid: r.uid, qid: q.id, max: Number(q.points) || 0 };
+      const k = `${r.uid}~${q.id}`;
+      if (skipKeys && skipKeys.has(k)) return;
+      keys[k] = { uid: r.uid, qid: q.id, max: Number(q.points) || 0 };
       const kk = ((key && key.answers) || {})[q.id] || {};
       rows.push([k, q.id, stripRich(q.text + (q.ask ? ' ' + q.ask : '')), q.points, kk.rubric || '', stripRich(kk.strong || ''), a, '', '', '']);
     });

@@ -104,6 +104,22 @@ describe('end to end quiz lifecycle on the demo backend', () => {
     expect((await ops.loadChangeLog()).length).toBeGreaterThan(5);
     expect((await ops.resultsCsv(a.id)).split('\r\n').length).toBe(3);
   });
+  it('exporting unscored-only leaves out anyone who already has a written score, and picks up new people on a re-export', async () => {
+    const now = Date.now();
+    const a = newQuiz({ opens: now - 1000, closes: now + 5000, keyAt: now + 9000 }, creator.email);
+    a.title = 'Partial scoring'; a.sections = [{ id: 's1', title: 'All', timerMin: 0, questions: [{ ...newQuestion('text', 't1'), text: 'T?', rubric: 'r', points: 2 }] }];
+    await ops.saveQuiz(a, creator, { publish: true });
+    await ops.saveAnswer(p1, a.id, 't1', 'Answer one', false); await ops.submitResponse(p1, a.id);
+    await ops.saveAnswer(p2, a.id, 't1', 'Answer two', false); await ops.submitResponse(p2, a.id);
+    await ops.setCloses(a.id, now - 1, creator, a.title);
+    await ops.calculate(a.id, creator);
+    // both unscored so far
+    let ex = await ops.exportWrittenFor(a.id, true); expect(ex.count).toBe(2);
+    await ops.saveWrittenScores(a.id, [{ uid: 'p1', qid: 't1', score: 1.5, feedback: '', flag: false }], creator, a.title);
+    // p1 now scored: the full export still lists both, the unscored-only export only lists p2
+    ex = await ops.exportWrittenFor(a.id); expect(ex.count).toBe(2);
+    ex = await ops.exportWrittenFor(a.id, true); expect(ex.count).toBe(1); expect(Object.values(ex.keys)[0].uid).toBe('p2');
+  });
   it('without auto-submit, unsubmitted work is ignored', async () => {
     const now = Date.now(); const a = newQuiz({ opens: now - 1000, closes: now + 5000, keyAt: now + 9000 }, creator.email);
     a.title = 'NoAuto'; a.sections = [{ id: 's1', title: 'All', questions: [{ ...newQuestion('mcq', 'm1'), text: 'M?', options: ['a', 'b'], correct: 1 }] }];

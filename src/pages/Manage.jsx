@@ -145,14 +145,24 @@ export function ManageList() {
 
 // Export, score in Claude, upload. One self-contained file, with the rubric inside and plain-language checks.
 function WrittenScoring({ id, item, run, busy }) {
-  const { toast, user } = useApp(); const [up, setUp] = useState(null); const [cols, setCols] = useState(false);
+  const { toast, user } = useApp(); const [up, setUp] = useState(null); const [cols, setCols] = useState(false); const [lastKeys, setLastKeys] = useState(null);
   const slug = item.title.replace(/[^\w]+/g, '-');
-  const doExport = () => run('export', async () => { const ex = await ops.exportWrittenFor(id); download(`${slug}-written-answers.csv`, ex.csv); return ex.count; }, (n) => `Downloaded ${n} written answers. The instructions and rubric are inside the file.`);
-  const check = async (file, opts) => { const text = opts && opts.text ? opts.text : await file.text(); const ex = await ops.exportWrittenFor(id); setUp({ ...parseWrittenUpload(text, ex.keys, opts), total: ex.count, name: (file && file.name) || (opts && opts.name), text, keys: ex.keys }); };
+  const doExport = (onlyUnscored) => run('export', async () => {
+    const ex = await ops.exportWrittenFor(id, onlyUnscored); setLastKeys(ex.keys);
+    download(`${slug}-written-answers${onlyUnscored ? '-new' : ''}.csv`, ex.csv); return ex.count;
+  }, (n) => n ? `Downloaded ${n} written answers. The instructions and rubric are inside the file.` : 'Nothing new to score — every written answer already has a score.');
+  // Validates the uploaded file against whichever export it actually came from: the keys from the export this
+  // session just downloaded (full or unscored-only), so "missing" isn't wrongly flagged against answers an
+  // unscored-only export deliberately left out. Falls back to a fresh full export if nothing was exported yet.
+  const check = async (file, opts) => {
+    const text = opts && opts.text ? opts.text : await file.text();
+    const keys = lastKeys || (await ops.exportWrittenFor(id)).keys;
+    setUp({ ...parseWrittenUpload(text, keys, opts), total: Object.keys(keys).length, name: (file && file.name) || (opts && opts.name), text, keys });
+  };
   return (
     <div style={{ marginTop: 8 }}>
-      <div className="row"><button className="btn sm s" disabled={!!busy} onClick={doExport}>Export for scoring</button><button className="btn sm" onClick={async () => { try { await navigator.clipboard.writeText(CLAUDE_MESSAGE); toast('Copied. Paste it into Claude with the file.'); } catch (e) { toast('Copy failed. Select the text and copy it by hand.', 'err'); } }}>Copy message for Claude</button><label className="btn sm s" style={{ cursor: 'pointer' }}>Upload scored CSV<input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => { check(e.target.files[0]); e.target.value = ''; }} /></label><button className="btn sm" onClick={() => setCols(!cols)}>{cols ? 'Hide' : 'What each column means'}</button></div>
-      <div className="muted small" style={{ marginTop: 6 }}>1. Export the file. 2. Give it to Claude with the message, and ask for the same file back with the score, feedback and flag columns filled in. 3. Upload it here. Nothing else needs to change.</div>
+      <div className="row"><button className="btn sm s" disabled={!!busy} onClick={() => doExport(false)}>Export for scoring</button><button className="btn sm" disabled={!!busy} onClick={() => doExport(true)}>Export unscored only</button><button className="btn sm" onClick={async () => { try { await navigator.clipboard.writeText(CLAUDE_MESSAGE); toast('Copied. Paste it into Claude with the file.'); } catch (e) { toast('Copy failed. Select the text and copy it by hand.', 'err'); } }}>Copy message for Claude</button><label className="btn sm s" style={{ cursor: 'pointer' }}>Upload scored CSV<input type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => { check(e.target.files[0]); e.target.value = ''; }} /></label><button className="btn sm" onClick={() => setCols(!cols)}>{cols ? 'Hide' : 'What each column means'}</button></div>
+      <div className="muted small" style={{ marginTop: 6 }}>1. Export the file — use "unscored only" to re-export just the people newly backfilled or signed in since you last scored. 2. Give it to Claude with the message, and ask for the same file back with the score, feedback and flag columns filled in. 3. Upload it here. Nothing else needs to change.</div>
       {cols && <div className="box2" style={{ marginTop: 10, whiteSpace: 'normal' }}><div className="scroll"><table className="tbl"><thead><tr><th>Column</th><th>Who fills it</th><th>Needed?</th><th>What it is</th></tr></thead><tbody>{SCORING_COLUMNS.map((c) => <tr key={c.name}><td className="mono" style={{ color: 'var(--accent)' }}>{c.name}</td><td><Chip tone={c.who === 'You' ? 'teal' : ''}>{c.who}</Chip></td><td className="small fg2">{c.need}</td><td className="small fg2">{c.what}</td></tr>)}</tbody></table></div></div>}
       {up && <div className="box2" style={{ marginTop: 10, whiteSpace: 'normal' }}><b style={{ fontWeight: 500 }}>{up.name}</b>: {up.ok.length} of {up.total} scores are ready{up.flagged ? `, ${up.flagged} flagged` : ''}.
         {up.missing.length > 0 && <div style={{ color: 'var(--warn)' }}>{up.missing.length} answers have no score yet. The release stays blocked until each one has a score (use Change score to give a 0).</div>}
