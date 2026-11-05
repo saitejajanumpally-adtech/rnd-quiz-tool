@@ -75,15 +75,21 @@ export function gradeQuiz({ quiz, key, responses, written = {}, autoSubmit }) {
     // Backfilled/imported responses have no startedAt, so there's no real "time taken" to compare — they
     // fall through to the submittedAt (import time) and then name tiebreaks like anyone else.
     const duration = (r.submittedAt && r.startedAt) ? r.submittedAt - r.startedAt : null;
-    rows.push({ uid: r.uid, name: r.name || r.email, email: r.email, total, max, auto: !!r.auto || !r.submitted, missingRequired, submittedAt: r.submittedAt || null, duration, sections: quiz.sections.map((s, i) => ({ title: s.flat ? 'All questions' : s.title, score: round05(secScore[i]), max: secMax[i] })), questions: per });
+    rows.push({ uid: r.uid, name: r.name || r.email, email: r.email, total, max, auto: !!r.auto || !r.submitted, missingRequired, submittedAt: r.submittedAt || null, duration, hidden: !!r.hiddenFromLeaderboard, sections: quiz.sections.map((s, i) => ({ title: s.flat ? 'All questions' : s.title, score: round05(secScore[i]), max: secMax[i] })), questions: per });
   });
   // Equal scores are broken by: who submitted first, then who took less time, then alphabetically.
   rows.sort((a, b) => b.total - a.total
     || (a.submittedAt ?? Infinity) - (b.submittedAt ?? Infinity)
     || (a.duration ?? Infinity) - (b.duration ?? Infinity)
     || String(a.name).localeCompare(String(b.name)));
-  rows.forEach((r, i) => { r.rank = i + 1; });
-  const avg = rows.length ? rows.reduce((a, r) => a + r.total, 0) / rows.length : 0;
-  const pub = { count: rows.length, avg: Math.round(avg * 100) / 100, max, top: topRows(rows) };
+  // A row an admin hid (for example their own entry, taken only to try the quiz out) gets no rank and is
+  // left out of everyone else's rank numbers, average and count — as if they hadn't taken it at all. They
+  // still get their own row below (graded, with their own total) so saveWrittenScores etc. still works and
+  // they can see their own result privately; they just never appear to anyone else.
+  let visibleRank = 0;
+  rows.forEach((r) => { if (r.hidden) r.rank = null; else { visibleRank += 1; r.rank = visibleRank; } });
+  const visible = rows.filter((r) => !r.hidden);
+  const avg = visible.length ? visible.reduce((a, r) => a + r.total, 0) / visible.length : 0;
+  const pub = { count: visible.length, avg: Math.round(avg * 100) / 100, max, top: topRows(visible) };
   return { rows, pub, unscoredWritten };
 }

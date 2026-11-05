@@ -262,17 +262,17 @@ export async function calculate(id, user) {
   const written = await loadWritten(id, quiz);
   const g = gradeQuiz({ quiz, key, responses, written, autoSubmit: !!quiz.autoSubmit });
   const prev = await previousRound(id, quiz).catch(() => null);
-  const mv = applyMovement(g.rows, prev); g.pub.top = topRows(g.rows); g.pub.prevCount = mv.prevCount; g.pub.comparable = mv.comparable;
+  const mv = applyMovement(g.rows, prev); g.pub.top = topRows(g.rows.filter((r) => !r.hidden)); g.pub.prevCount = mv.prevCount; g.pub.comparable = mv.comparable;
   const ops = [];
   const byUid = Object.fromEntries(responses.map((r) => [r.uid, r]));
   g.rows.forEach((r) => {
-    ops.push({ type: 'set', path: `myResults/${id}_${r.uid}`, data: { uid: r.uid, quizId: id, total: r.total, max: r.max, rank: r.rank, count: g.rows.length, sections: r.sections, questions: r.questions, auto: r.auto, prevRank: r.prevRank, prevTotal: r.prevTotal, prevCount: mv.prevCount, move: r.move, missingRequired: r.missingRequired } });
+    ops.push({ type: 'set', path: `myResults/${id}_${r.uid}`, data: { uid: r.uid, quizId: id, total: r.total, max: r.max, rank: r.rank, hidden: r.hidden, count: g.pub.count, sections: r.sections, questions: r.questions, auto: r.auto, prevRank: r.prevRank, prevTotal: r.prevTotal, prevCount: mv.prevCount, move: r.move, missingRequired: r.missingRequired } });
     ops.push({ type: 'set', merge: true, path: 'stats/' + r.uid, data: { history: { [id]: { score: r.total, max: r.max, opens: quiz.opens, title: quiz.title } } } });
     const resp = byUid[r.uid];
     if (resp && !resp.submitted && r.auto) ops.push({ type: 'update', path: `responses/${id}_${r.uid}`, data: { submitted: true, auto: true, submittedAt: quiz.closes, updatedAt: Date.now() } });
   });
   ops.push({ type: 'set', path: 'resultsPublic/' + id, data: { ...g.pub, computedAt: Date.now() } });
-  ops.push({ type: 'set', path: 'resultsFull/' + id, data: { prevCount: mv.prevCount, comparable: mv.comparable, prevTitle: prev ? prev.item.title : '', rows: g.rows.map((r) => ({ rank: r.rank, uid: r.uid, name: r.name, email: r.email, total: r.total, auto: r.auto, missingRequired: r.missingRequired, prevRank: r.prevRank, move: r.move, sections: r.sections })) } });
+  ops.push({ type: 'set', path: 'resultsFull/' + id, data: { prevCount: mv.prevCount, comparable: mv.comparable, prevTitle: prev ? prev.item.title : '', rows: g.rows.filter((r) => !r.hidden).map((r) => ({ rank: r.rank, uid: r.uid, name: r.name, email: r.email, total: r.total, auto: r.auto, missingRequired: r.missingRequired, prevRank: r.prevRank, move: r.move, sections: r.sections })) } });
   await store.batch(ops);
   await patchIndex(id, { 'ops.calcAt': Date.now(), 'ops.writtenAt': g.unscoredWritten === 0 ? Date.now() : 0, submittedCount: g.rows.length, avgScore: g.pub.avg });
   await log(user, 'Calculated scores', `${quiz.title}: ${g.rows.length} participants, ${g.unscoredWritten} written answers still unscored`);
@@ -336,6 +336,20 @@ export async function markOp(id, op, user, label) { await patchIndex(id, { ['ops
 // only role whose access checks that field directly, so this silently locks them out with no visible symptom
 // for admins/creators. Re-applies the flag; harmless to run on a quiz that's already in sync.
 export async function resyncRelease(id) { await store.update('quizKeys/' + id, { released: true }); }
+
+// Everyone who has a response for this quiz, for the admin-only "Hide from leaderboard" list — independent
+// of whether scores have been calculated yet, so hiding can happen before the first Calculate too.
+export async function listParticipants(quizId) {
+  const responses = await store.list('responses', { where: [['quizId', '==', quizId]] });
+  return responses.map((r) => ({ uid: r.uid, name: r.name || r.email, email: r.email, hidden: !!r.hiddenFromLeaderboard })).sort((a, b) => a.name.localeCompare(b.name));
+}
+// Hides (or unhides) one participant's entry from this quiz's leaderboard — the Top 10, the full leaderboard,
+// the average and the participant count. They still get their own graded result privately; only the version
+// everyone else sees changes. Takes effect the next time scores are calculated for this quiz.
+export async function setHidden(quizId, row, hidden, user, title) {
+  await store.update(`responses/${quizId}_${row.uid}`, { hiddenFromLeaderboard: hidden });
+  await log(user, hidden ? 'Hid a participant from the leaderboard' : 'Unhid a participant from the leaderboard', `${title}: ${row.name || row.email}`);
+}
 
 // ---------------- exports
 export async function resultsCsv(id) {

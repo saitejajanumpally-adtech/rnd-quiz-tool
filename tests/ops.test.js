@@ -120,6 +120,38 @@ describe('end to end quiz lifecycle on the demo backend', () => {
     ex = await ops.exportWrittenFor(a.id); expect(ex.count).toBe(2);
     ex = await ops.exportWrittenFor(a.id, true); expect(ex.count).toBe(1); expect(Object.values(ex.keys)[0].uid).toBe('p2');
   });
+  it('hides a participant from the leaderboard entirely while keeping their own private result', async () => {
+    const now = Date.now();
+    const a = newQuiz({ opens: now - 1000, closes: now + 5000, keyAt: now - 100 }, creator.email);
+    a.title = 'Organizer took it too'; a.sections = [{ id: 's1', title: 'All', questions: [{ ...newQuestion('mcq', 'm1'), text: 'M?', options: ['a', 'b'], correct: 1 }] }];
+    await ops.saveQuiz(a, creator, { publish: true });
+    await ops.saveAnswer(admin, a.id, 'm1', 1, false); await ops.submitResponse(admin, a.id);
+    await ops.saveAnswer(p1, a.id, 'm1', 0, false); await ops.submitResponse(p1, a.id);
+    await ops.setCloses(a.id, now - 1, creator, a.title);
+    let g = await ops.calculate(a.id, creator);
+    expect(g.count).toBe(2);
+    let participants = await ops.listParticipants(a.id);
+    expect(participants.map((r) => r.hidden)).toEqual([false, false]);
+    const adminRow = participants.find((r) => r.uid === admin.uid);
+    await ops.setHidden(a.id, adminRow, true, creator, a.title);
+    g = await ops.calculate(a.id, creator);
+    // the hidden admin still gets graded (still counted in the admin-facing total)...
+    expect(g.count).toBe(2);
+    // ...but is gone from every participant-facing view: public results, full leaderboard, average and count
+    const pub = await store.get('resultsPublic/' + a.id);
+    expect(pub.count).toBe(1); expect(pub.top.map((t) => t.uid)).toEqual(['p1']);
+    const full = await store.get('resultsFull/' + a.id);
+    expect(full.rows.map((r) => r.uid)).toEqual(['p1']);
+    const p1Result = await store.get(`myResults/${a.id}_p1`);
+    expect(p1Result.rank).toBe(1); expect(p1Result.count).toBe(1); // ranked and counted as if admin never took it
+    // the admin still has their own private result, just with no rank
+    const adminResult = await store.get(`myResults/${a.id}_${admin.uid}`);
+    expect(adminResult.hidden).toBe(true); expect(adminResult.rank).toBeNull(); expect(adminResult.total).toBe(adminResult.max); // answered correctly
+    // unhiding restores them
+    await ops.setHidden(a.id, adminRow, false, creator, a.title);
+    await ops.calculate(a.id, creator);
+    expect((await store.get('resultsPublic/' + a.id)).count).toBe(2);
+  });
   it('without auto-submit, unsubmitted work is ignored', async () => {
     const now = Date.now(); const a = newQuiz({ opens: now - 1000, closes: now + 5000, keyAt: now + 9000 }, creator.email);
     a.title = 'NoAuto'; a.sections = [{ id: 's1', title: 'All', questions: [{ ...newQuestion('mcq', 'm1'), text: 'M?', options: ['a', 'b'], correct: 1 }] }];

@@ -80,7 +80,7 @@ export default function Leaderboard({ id }) {
             {top.length === 0 ? <div className="muted">No results to show.</div> : <>
               <div className="lrow" style={{ borderTop: 0, padding: '8px 0' }}><span className="lab">Rank</span><span className="lab">Player</span><span className="lab barcell" /><span className="lab" style={{ textAlign: 'right' }}>Score</span><span className="lab" style={{ textAlign: 'right' }}>{hasPrev ? 'Change' : ''}</span></div>
               {top.slice(3).map((p) => rowFor(p, p.uid ? p.uid === user.uid : p.name === user.name))}
-              {mine && !inTop && <><div style={{ borderTop: '2px dashed var(--border2)', margin: '10px 0' }} />{rowFor({ rank: mine.rank, uid: user.uid, name: user.name, total: mine.total, move: mine.move }, true)}</>}
+              {mine && !mine.hidden && !inTop && <><div style={{ borderTop: '2px dashed var(--border2)', margin: '10px 0' }} />{rowFor({ rank: mine.rank, uid: user.uid, name: user.name, total: mine.total, move: mine.move }, true)}</>}
               {top.length <= 3 && !mine && <div className="muted small" style={{ marginTop: 8 }}>The rest of the Top 10 appears here.</div>}
             </>}
             <div className="muted small" style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>Equal scores are ranked by who submitted first, then who took less time. Everyone sees the Top 10 and their own row.{canFull ? '' : ' Only leads and above can open the full leaderboard.'}</div>
@@ -94,7 +94,7 @@ export default function Leaderboard({ id }) {
               <div className="row center" style={{ gap: 18 }}><Ring value={fmtN(mine.total)} max={mine.max} />
                 <div style={{ minWidth: 0 }}>{mine.prevTotal != null && showMove ? <><div>{mine.total > mine.prevTotal ? 'Up' : mine.total < mine.prevTotal ? 'Down' : 'Same as'} {mine.total === mine.prevTotal ? '' : 'from '}{fmtN(mine.prevTotal)} last round</div>{mine.total !== mine.prevTotal && <div className="small" style={{ color: mine.total > mine.prevTotal ? 'var(--success)' : 'var(--warn)', marginTop: 4 }}>{mine.total > mine.prevTotal ? '+' : ''}{fmtN(mine.total - mine.prevTotal)} points</div>}</> : <div className="fg2">{pub ? `The average was ${pub.avg}.` : ''}</div>}</div></div>
               <div className="row" style={{ marginTop: 18, gap: 10 }}>
-                <div className="tile" style={{ flex: '1 1 90px', padding: 12 }}><div className="lab">Rank</div><div className="v" style={{ fontSize: 22 }}>#{mine.rank}<small> / {mine.count}</small></div></div>
+                <div className="tile" style={{ flex: '1 1 90px', padding: 12 }}><div className="lab">Rank</div><div className="v" style={{ fontSize: 22 }}>{mine.hidden ? <span style={{ fontSize: 15 }}>Hidden</span> : <>#{mine.rank}<small> / {mine.count}</small></>}</div></div>
                 <div className="tile" style={{ flex: '1 1 90px', padding: 12 }}><div className="lab">Average</div><div className="v" style={{ fontSize: 22 }}>{pub ? pub.avg : '–'}</div></div>
                 {hasPrev && mine.move != null && <div className="tile" style={{ flex: '1 1 90px', padding: 12 }}><div className="lab">Change</div><div className="v" style={{ fontSize: 22, color: mine.move > 0 ? 'var(--success)' : mine.move < 0 ? 'var(--warn)' : 'var(--fg)' }}>{mine.move > 0 ? '↑ ' : mine.move < 0 ? '↓ ' : '– '}{Math.abs(mine.move)}<small> {Math.abs(mine.move) === 1 ? 'place' : 'places'}</small></div></div>}
               </div>
