@@ -148,16 +148,22 @@ export function ManageList() {
 // quiz's leaderboard entirely — Top 10, full leaderboard, average and participant count. They keep their own
 // private result. Takes effect on the next Calculate/Recalculate.
 function HideFromLeaderboard({ id, item, user, toast }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false); const [text, setText] = useState('');
   const { data, loading, reload } = useAsync(() => (open ? ops.listParticipants(id) : Promise.resolve(null)), [id, open]);
   const toggle = async (row) => {
     try { await ops.setHidden(id, row, !row.hidden, user, item.title); toast(!row.hidden ? `${row.name} is hidden from this quiz's leaderboard. Recalculate to apply it.` : `${row.name} is back on the leaderboard. Recalculate to apply it.`); reload(); }
     catch (e) { toast('That didn\'t work. ' + (e.message || ''), 'err'); }
   };
-  const hiddenCount = (data || []).filter((r) => r.hidden).length;
+  const all = data || []; const hiddenCount = all.filter((r) => r.hidden).length;
+  const rows = all.filter((r) => (r.name + r.email).toLowerCase().includes(text.toLowerCase()));
   return (
     <div className="card mt"><div className="row between center"><div><div className="h3" style={{ marginBottom: 4 }}>Hide from leaderboard</div><div className="fg2">For someone who took this quiz but shouldn't appear to others — for example the organizer. Their own result stays private to them; everyone else's view, average and count act as if they hadn't taken it.{hiddenCount > 0 ? ` ${hiddenCount} currently hidden.` : ''}</div></div><button className="btn sm" onClick={() => setOpen(!open)}>{open ? 'Hide list' : 'Manage'}</button></div>
-      {open && (loading ? <Spinner /> : <div style={{ marginTop: 12 }}>{(data || []).length === 0 ? <div className="muted">No one has taken this quiz yet.</div> : (data || []).map((r) => <div key={r.uid} className="box2 row between center" style={{ whiteSpace: 'normal', marginBottom: 6 }}><span>{r.name}{r.hidden && <span className="chip warn" style={{ marginLeft: 8 }}>Hidden</span>}</span><button className="btn sm" onClick={() => toggle(r)}>{r.hidden ? 'Unhide' : 'Hide'}</button></div>)}</div>)}
+      {open && (loading ? <Spinner /> : <div style={{ marginTop: 12 }}>
+        {all.length > 0 && <input className="input" style={{ marginBottom: 10, width: '100%', maxWidth: 320 }} placeholder="Search name or email" aria-label="Search participants" value={text} onChange={(e) => setText(e.target.value)} />}
+        <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+          {all.length === 0 ? <div className="muted">No one has taken this quiz yet.</div> : rows.length === 0 ? <div className="muted">No one matches “{text}”.</div> : rows.map((r) => <div key={r.uid} className="box2 row between center" style={{ whiteSpace: 'normal', marginBottom: 6 }}><span>{r.name}{r.hidden && <span className="chip warn" style={{ marginLeft: 8 }}>Hidden</span>}</span><button className="btn sm" onClick={() => toggle(r)}>{r.hidden ? 'Unhide' : 'Hide'}</button></div>)}
+        </div>
+      </div>)}
     </div>
   );
 }

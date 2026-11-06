@@ -320,7 +320,7 @@ describe('written scoring panel', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'Export for scoring' }));
       await waitFor(() => expect(captured).toBeTruthy());
       const text = await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsText(captured); });
-      expect(text).toMatch(/SCORING INSTRUCTIONS/); expect(text).toContain('key,question_id,question,max_points,rubric,strong_answer,answer,score,feedback,flag'); expect(text).toContain('Score 0 to 2 in steps of 0.5');
+      expect(text).toMatch(/SCORING INSTRUCTIONS/); expect(text).toContain('key,participant,question_id,question,max_points,rubric,strong_answer,answer,score,feedback,flag'); expect(text).toContain('Score 0 to 2 in steps of 0.5');
       fireEvent.click(screen.getByRole('button', { name: 'What each column means' })); expect(await screen.findByText('Identifies the person and the question. If it changes, the row can’t be matched.')).toBeTruthy();
       const ex = await ops.exportWrittenFor('z_oct2'); const keys = Object.keys(ex.keys); expect(keys.length).toBe(2);
       const csv = `key,score,feedback,flag\n${keys[0]},0.75,"Clear, and specific.",\n${keys[1]},1,Good,yes\n`;

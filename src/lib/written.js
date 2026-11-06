@@ -6,6 +6,7 @@ import { stripRich } from './richtext.js';
 // What each column in the scoring file is for. Shown in the app and written into the file.
 export const SCORING_COLUMNS = [
   { name: 'key', who: 'Do not change', need: 'Required', what: 'Identifies the person and the question. If it changes, the row can’t be matched.' },
+  { name: 'participant', who: 'Do not change', need: 'Read only', what: 'The person’s name, so you can find them if their answer gets flagged.' },
   { name: 'question_id', who: 'Do not change', need: 'Read only', what: 'The question’s id.' },
   { name: 'question', who: 'Do not change', need: 'Read only', what: 'The question text.' },
   { name: 'max_points', who: 'Do not change', need: 'Read only', what: 'The most this answer can score.' },
@@ -41,7 +42,7 @@ export function buildWrittenExport(quiz, responses, autoSubmit, key = {}, skipKe
       if (skipKeys && skipKeys.has(k)) return;
       keys[k] = { uid: r.uid, qid: q.id, max: Number(q.points) || 0 };
       const kk = ((key && key.answers) || {})[q.id] || {};
-      rows.push([k, q.id, stripRich(q.text + (q.ask ? ' ' + q.ask : '')), q.points, kk.rubric || '', stripRich(kk.strong || ''), a, '', '', '']);
+      rows.push([k, r.name || r.email, q.id, stripRich(q.text + (q.ask ? ' ' + q.ask : '')), q.points, kk.rubric || '', stripRich(kk.strong || ''), a, '', '', '']);
     });
   });
   return { csv: INSTRUCTIONS.join('\r\n') + '\r\n' + toCsv(rows), keys, count: rows.length - 1 };

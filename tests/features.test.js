@@ -110,7 +110,7 @@ describe('written scoring file', () => {
   const key = { answers: { t1: { rubric: 'Score 0 to 2.', strong: 'Names concentration risk.' } } };
   const ex = buildWrittenExport(quiz, [{ uid: 'a', submitted: true, answers: { t1: 'No, because of risk, and more.' } }], false, key);
   it('puts the instructions, rubric and an empty score column in the export', () => {
-    expect(ex.csv).toMatch(/^# SCORING INSTRUCTIONS/); expect(ex.csv).toContain('key,question_id,question,max_points,rubric,strong_answer,answer,score,feedback,flag');
+    expect(ex.csv).toMatch(/^# SCORING INSTRUCTIONS/); expect(ex.csv).toContain('key,participant,question_id,question,max_points,rubric,strong_answer,answer,score,feedback,flag');
     expect(ex.csv).toContain('Score 0 to 2.'); expect(ex.csv).toContain('Is 70% healthy? Explain.'); expect(ex.csv).not.toMatch(/@/); // no email addresses are sent out
     expect(ex.count).toBe(1);
   });
